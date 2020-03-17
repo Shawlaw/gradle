@@ -27,6 +27,7 @@ import org.gradle.instantexecution.initialization.InstantExecutionStartParameter
 import org.gradle.instantexecution.serialization.PropertyKind
 import org.gradle.instantexecution.serialization.PropertyProblem
 import org.gradle.instantexecution.serialization.PropertyTrace
+import org.gradle.instantexecution.serialization.StructuredMessage
 import org.gradle.instantexecution.serialization.unknownPropertyError
 
 import org.gradle.internal.event.ListenerManager
@@ -68,22 +69,12 @@ class InstantExecutionReport(
 
         override fun buildFinished(result: BuildResult) {
             if (problems.isNotEmpty()) {
-                val outputDirectory = calculateOutputDirectory()
-                logSummary(outputDirectory)
-                writeReportFiles(outputDirectory)
+                if (result.failure?.cause !is InstantExecutionException) {
+                    logConsoleSummary()
+                }
+                writeReportFiles()
             }
         }
-
-        private
-        fun calculateOutputDirectory(): File =
-            startParameter.rootDirectory.resolve(
-                "build/reports/instant-execution/${startParameter.instantExecutionCacheKey}"
-            ).let { base ->
-                if (!base.exists()) base
-                else generateSequence(1) { it + 1 }
-                    .map { base.resolveSibling("${base.name}-$it") }
-                    .first { !it.exists() }
-            }
     }
 
     private
@@ -92,9 +83,8 @@ class InstantExecutionReport(
     fun add(problem: PropertyProblem) {
         problems.add(problem)
         if (problems.size >= startParameter.maxProblems) {
-            throw TooManyInstantExecutionProblemsException().also { ex ->
-                problems.mapNotNull { it.exception }.forEach { ex.addSuppressed(it) }
-            }
+            // TODO unique problems, path to report
+            throw TooManyInstantExecutionProblemsException(buildExceptionSummary(), problems)
         }
     }
 
@@ -110,14 +100,20 @@ class InstantExecutionReport(
 
         val fatalError = runWithExceptionHandling(block)
 
-        if (problems.isEmpty()) {
-            require(fatalError == null)
-            return null
+        return when {
+            problems.isEmpty() -> {
+                require(fatalError == null)
+                null
+            }
+            fatalError != null -> {
+                require(fatalError is InstantExecutionException)
+                fatalError
+            }
+            else -> {
+                instantExecutionExceptionForErrors()
+                    ?: instantExecutionExceptionForProblems()
+            }
         }
-
-        return fatalError?.withSuppressed(errors())
-            ?: instantExecutionExceptionForErrors()
-            ?: instantExecutionExceptionForProblems()
     }
 
     private
@@ -125,8 +121,8 @@ class InstantExecutionReport(
         try {
             block()
         } catch (e: Throwable) {
-            when (e.cause ?: e) {
-                is TooManyInstantExecutionProblemsException -> return e
+            when (e) {
+                is InstantExecutionException -> return e
                 is StackOverflowError -> add(e)
                 is Error -> throw e
                 else -> add(e)
@@ -146,31 +142,42 @@ class InstantExecutionReport(
     fun instantExecutionExceptionForErrors(): Throwable? =
         errors()
             .takeIf { it.isNotEmpty() }
-            ?.let { errors -> InstantExecutionErrorsException().withSuppressed(errors) }
+            // TODO unique problems, path to report
+            // TODO this is hiding all collected problems ... report them properly instead
+            ?.let { errors -> InstantExecutionErrorsException(errors) }
 
     private
     fun instantExecutionExceptionForProblems(): Throwable? =
-        if (startParameter.failOnProblems) InstantExecutionProblemsException()
+        if (startParameter.failOnProblems) InstantExecutionProblemsException(buildExceptionSummary(), problems)
         else null
-
-    private
-    fun Throwable.withSuppressed(errors: List<PropertyProblem.Error>) = apply {
-        errors.forEach {
-            addSuppressed(it.exception)
-        }
-    }
 
     private
     fun errors() =
         problems.asIterable().filterIsInstance<PropertyProblem.Error>()
 
     private
-    fun logSummary(outputDirectory: File) {
-        logger.warn(summary(outputDirectory))
+    fun warnings() =
+        problems.asIterable().filterIsInstance<PropertyProblem.Warning>()
+
+    private
+    val outputDirectory: File by lazy {
+        startParameter.rootDirectory.resolve(
+            "build/reports/instant-execution/${startParameter.instantExecutionCacheKey}"
+        ).let { base ->
+            if (!base.exists()) base
+            else generateSequence(1) { it + 1 }
+                .map { base.resolveSibling("${base.name}-$it") }
+                .first { !it.exists() }
+        }
     }
 
     private
-    fun writeReportFiles(outputDirectory: File) {
+    fun logConsoleSummary() {
+        logger.warn(buildConsoleSummary())
+    }
+
+    private
+    fun writeReportFiles() {
         require(outputDirectory.mkdirs()) {
             "Could not create instant execution report directory '$outputDirectory'"
         }
@@ -179,27 +186,46 @@ class InstantExecutionReport(
     }
 
     private
-    fun summary(outputDirectory: File): String {
-        val uniquePropertyProblems = problems
-            .sortedBy { it.trace.sequence.toList().reversed().joinToString(".") }
-            .groupBy { propertyDescriptionFor(it) to it.message }
-            .keys
+    fun buildExceptionSummary(): String =
+        StringBuilder().apply {
+            appendln(buildSummaryHeader(uniquePropertyProblems()))
+            append(buildSummaryReportLink())
+        }.toString()
+
+    private
+    fun buildConsoleSummary(): String {
+        val uniquePropertyProblems = uniquePropertyProblems()
         return StringBuilder().apply {
             appendln()
-            val totalProblemCount = problems.size
-            val problemOrProblems = if (totalProblemCount == 1) "problem was" else "problems were"
-            val uniqueProblemCount = uniquePropertyProblems.size
-            val seemsOrSeem = if (uniqueProblemCount == 1) "seems" else "seem"
-            appendln("$totalProblemCount instant execution $problemOrProblems found, $uniqueProblemCount of which $seemsOrSeem unique:")
+            appendln(buildSummaryHeader(uniquePropertyProblems))
             uniquePropertyProblems.forEach { (property, message) ->
-                append("  - ")
+                append("  > ")
                 append(property)
                 append(": ")
                 appendln(message)
             }
-            appendln("See the complete report at ${clickableUrlFor(outputDirectory.resolve(reportHtmlFileName))}")
+            appendln(buildSummaryReportLink())
         }.toString()
     }
+
+    private
+    fun uniquePropertyProblems(): Set<UniquePropertyProblem> =
+        problems.sortedBy { it.trace.sequence.toList().reversed().joinToString(".") }
+            .groupBy { propertyDescriptionFor(it) to it.message }
+            .keys
+
+    private
+    fun buildSummaryHeader(uniquePropertyProblems: Set<UniquePropertyProblem>): String {
+        val totalProblemCount = problems.size
+        val problemOrProblems = if (totalProblemCount == 1) "problem was" else "problems were"
+        val uniqueProblemCount = uniquePropertyProblems.size
+        val seemsOrSeem = if (uniqueProblemCount == 1) "seems" else "seem"
+        return "$totalProblemCount instant execution $problemOrProblems found, $uniqueProblemCount of which $seemsOrSeem unique."
+    }
+
+    private
+    fun buildSummaryReportLink() =
+        "See the complete report at ${clickableUrlFor(outputDirectory.resolve(reportHtmlFileName))}"
 
     private
     fun copyReportResources(outputDirectory: File) {
@@ -210,7 +236,7 @@ class InstantExecutionReport(
             "kotlin.js"
         ).forEach { resourceName ->
             copyURLToFile(
-                getResource(resourceName),
+                javaClass.requireResource(resourceName),
                 outputDirectory.resolve(resourceName)
             )
         }
@@ -284,40 +310,54 @@ class InstantExecutionReport(
             "kind" to "Unknown"
         )
     }
+}
 
-    private
-    fun propertyDescriptionFor(problem: PropertyProblem): String = problem.trace.run {
-        when (this) {
-            is PropertyTrace.Property -> simplePropertyDescription()
-            else -> toString()
-        }
+
+private
+typealias UniquePropertyProblem = Pair<String, StructuredMessage>
+
+
+// TODO should not be called from Codec!
+// move there
+// see if there's something different in :instantExecutionReport
+// if yes, then consider sharing kotlin-common code, again
+internal
+fun propertyDescriptionFor(problem: PropertyProblem): String = problem.trace.run {
+    when (this) {
+        is PropertyTrace.Property -> simplePropertyDescription()
+        else -> toString()
     }
+}
 
-    private
-    fun getResource(path: String): URL = javaClass.getResource(path).also {
-        require(it != null) { "Resource `$path` could not be found!" }
-    }
 
-    private
-    fun PropertyTrace.Property.simplePropertyDescription(): String = when (kind) {
-        PropertyKind.Field -> "field '$name' from type '${firstTypeFrom(trace).name}'"
-        else -> "$kind '$name' of '${taskPathFrom(trace)}'"
-    }
+private
+fun Class<*>.requireResource(path: String): URL = getResource(path).also {
+    require(it != null) { "Resource `$path` could not be found!" }
+}
 
-    private
-    fun taskPathFrom(trace: PropertyTrace): String =
-        trace.sequence.filterIsInstance<PropertyTrace.Task>().first().path
 
-    private
-    fun firstTypeFrom(trace: PropertyTrace): Class<*> =
-        trace.sequence.mapNotNull { typeFrom(it) }.first()
+private
+fun PropertyTrace.Property.simplePropertyDescription(): String = when (kind) {
+    PropertyKind.Field -> "field '$name' from type '${firstTypeFrom(trace).name}'"
+    else -> "$kind '$name' of '${taskPathFrom(trace)}'"
+}
 
-    private
-    fun typeFrom(trace: PropertyTrace): Class<out Any>? = when (trace) {
-        is PropertyTrace.Bean -> trace.type
-        is PropertyTrace.Task -> trace.type
-        else -> null
-    }
+
+private
+fun taskPathFrom(trace: PropertyTrace): String =
+    trace.sequence.filterIsInstance<PropertyTrace.Task>().first().path
+
+
+private
+fun firstTypeFrom(trace: PropertyTrace): Class<*> =
+    trace.sequence.mapNotNull { typeFrom(it) }.first()
+
+
+private
+fun typeFrom(trace: PropertyTrace): Class<out Any>? = when (trace) {
+    is PropertyTrace.Bean -> trace.type
+    is PropertyTrace.Task -> trace.type
+    else -> null
 }
 
 
