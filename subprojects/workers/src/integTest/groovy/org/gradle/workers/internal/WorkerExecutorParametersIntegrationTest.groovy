@@ -18,8 +18,9 @@ package org.gradle.workers.internal
 
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.workers.IsolationMode
 import org.gradle.workers.fixtures.WorkerExecutorFixture
+import spock.lang.Ignore
+import spock.lang.Issue
 import spock.lang.Unroll
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -32,14 +33,13 @@ class WorkerExecutorParametersIntegrationTest extends AbstractIntegrationSpec {
 
     def setup() {
         buildFile << """
-            import javax.inject.Inject
             import org.gradle.workers.WorkerExecutor
 
             class ParameterTask extends DefaultTask {
                 private final WorkerExecutor workerExecutor
 
                 @Internal
-                IsolationMode isolationMode
+                String isolationMode
                 @Internal
                 Closure paramConfig
 
@@ -51,14 +51,12 @@ class WorkerExecutorParametersIntegrationTest extends AbstractIntegrationSpec {
                 @TaskAction
                 void doWork() {
                     def parameterAction = paramConfig != null ? paramConfig : {}
-                    workerExecutor."\${getWorkerMethod(isolationMode)}"().submit(ParameterWorkAction.class, parameterAction)
+                    workerExecutor."\${isolationMode}"().submit(ParameterWorkAction.class, parameterAction)
                 }
 
                 void parameters(Closure closure) {
                     paramConfig = closure
                 }
-
-                ${fixture.workerMethodTranslation}
             }
         """
     }
@@ -295,6 +293,43 @@ class WorkerExecutorParametersIntegrationTest extends AbstractIntegrationSpec {
         isolationMode << ISOLATION_MODES
     }
 
+    /**
+     * This is a reproduction test case for https://github.com/gradle/gradle/issues/13843.  This will only fail if the
+     * system default encoding does not match the encoding of the build process.  I was able to reliably get it to fail
+     * on Ubuntu Linux 16.04.
+     */
+    @Issue('https://github.com/gradle/gradle/issues/13843')
+    @Ignore
+    def "can provide a file property parameter with non-ASCII characters using isolation mode #isolationMode"() {
+        buildFile << """
+            ${parameterWorkAction('RegularFileProperty', '''
+                def file = parameters.testParam.get().getAsFile()
+                println file.text
+            ''')}
+
+            task runWork(type: ParameterTask) {
+                isolationMode = ${isolationMode}
+                def file = project.file("test!@#\\\$^&()_+=-.`~,你所有的基地都属于我们")
+                doFirst {
+                    file.parentFile.mkdirs()
+                    file.text = "foo"
+                }
+                parameters {
+                    testParam.set(file)
+                }
+            }
+        """
+
+        when:
+        succeeds("runWork")
+
+        then:
+        outputContains("foo")
+
+        where:
+        isolationMode << ISOLATION_MODES
+    }
+
     def "can provide directory property parameters with isolation mode #isolationMode"() {
         buildFile << """
             ${parameterWorkAction('DirectoryProperty', 'println parameters.testParam.get().getAsFile().name')}
@@ -337,7 +372,7 @@ class WorkerExecutorParametersIntegrationTest extends AbstractIntegrationSpec {
             def countingService = gradle.sharedServices.registerIfAbsent("counting", CountingService) { }
 
             task runWork(type: ParameterTask) {
-                isolationMode = ${isolationMode}
+                isolationMode = '${isolationMode}'
                 parameters {
                     testParam.set(countingService)
                 }
@@ -353,7 +388,7 @@ class WorkerExecutorParametersIntegrationTest extends AbstractIntegrationSpec {
 
         where:
         // TODO - this should work with classloader isolation too
-        isolationMode << ["IsolationMode.NONE"]
+        isolationMode << ['noIsolation']
     }
 
     def "can provide managed object parameters with isolation mode #isolationMode"() {

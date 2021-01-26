@@ -24,7 +24,7 @@ import org.gradle.api.tasks.testing.TestListener;
 import org.gradle.api.tasks.testing.TestOutputEvent;
 import org.gradle.api.tasks.testing.TestOutputListener;
 import org.gradle.api.tasks.testing.TestResult;
-import org.gradle.internal.serialize.PlaceholderException;
+import org.gradle.internal.serialize.PlaceholderExceptionSupport;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -110,7 +110,7 @@ public class TestReportDataCollector implements TestListener, TestOutputListener
     }
 
     private String exceptionClassName(Throwable throwable) {
-        return throwable instanceof PlaceholderException ? ((PlaceholderException) throwable).getExceptionClassName() : throwable.getClass().getName();
+        return throwable instanceof PlaceholderExceptionSupport ? ((PlaceholderExceptionSupport) throwable).getExceptionClassName() : throwable.getClass().getName();
     }
 
     private String stackTrace(Throwable throwable) {
@@ -131,7 +131,7 @@ public class TestReportDataCollector implements TestListener, TestOutputListener
 
     @Override
     public void onOutput(TestDescriptor testDescriptor, TestOutputEvent outputEvent) {
-        String className = testDescriptor.getClassName();
+        String className = findEnclosingClassName(testDescriptor);
         if (className == null) {
             pendingOutputEvents.put(((TestDescriptorInternal) testDescriptor).getId(), outputEvent);
             return;
@@ -151,5 +151,16 @@ public class TestReportDataCollector implements TestListener, TestOutputListener
         } else {
             outputWriter.onOutput(classResult.getId(), methodResult.getId(), outputEvent);
         }
+    }
+
+    private static String findEnclosingClassName(TestDescriptor testDescriptor) {
+        if (testDescriptor == null) {
+            return null;
+        }
+        String className = testDescriptor.getClassName();
+        if (className != null) {
+            return className;
+        }
+        return findEnclosingClassName(testDescriptor.getParent());
     }
 }

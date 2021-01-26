@@ -19,7 +19,6 @@ package org.gradle.integtests.samples
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
 import org.gradle.integtests.fixtures.Sample
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.test.fixtures.file.TestFile
 import org.junit.Rule
 import spock.lang.Unroll
@@ -27,7 +26,7 @@ import spock.lang.Unroll
 import java.util.jar.Manifest
 
 import static org.hamcrest.CoreMatchers.equalTo
-import static org.junit.Assert.assertThat
+import static org.hamcrest.MatcherAssert.assertThat
 
 class SamplesJavaQuickstartIntegrationTest extends AbstractIntegrationSpec {
 
@@ -36,28 +35,25 @@ class SamplesJavaQuickstartIntegrationTest extends AbstractIntegrationSpec {
 
     def setup() {
         executer.withRepositoryMirrors()
-        executer.expectDeprecationWarning()
     }
 
     @Unroll
-    @ToBeFixedForInstantExecution
-    def "can build and upload jar with #dsl dsl"() {
+    def "can build jar with #dsl dsl"() {
         given:
         TestFile javaprojectDir = sample.dir.file(dsl)
 
         when: "Build and test projects"
-        executer.inDirectory(javaprojectDir).withTasks('clean', 'build', 'uploadArchives').run()
+        executer.inDirectory(javaprojectDir).withTasks('clean', 'build').run()
 
         then: "Check tests have run"
         def result = new DefaultTestExecutionResult(javaprojectDir)
         result.assertTestClassesExecuted('org.gradle.PersonTest')
         // Check jar exists
-        javaprojectDir.file("build/libs/quickstart-1.0.jar").assertIsFile()
-        // Check jar uploaded
-        javaprojectDir.file('repos/quickstart-1.0.jar').assertIsFile()
+        def jarFile = javaprojectDir.file("build/libs/quickstart-1.0.jar")
+        jarFile.assertIsFile()
         // Check contents of Jar
         TestFile jarContents = file('jar')
-        javaprojectDir.file('repos/quickstart-1.0.jar').unzipTo(jarContents)
+        jarFile.unzipTo(jarContents)
         jarContents.assertHasDescendants(
             'META-INF/MANIFEST.MF',
             'org/gradle/Person.class',

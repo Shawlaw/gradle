@@ -1,10 +1,8 @@
 package Gradle_Util.buildTypes
 
-import common.Os
+import common.Os.LINUX
 import common.buildToolGradleParameters
-import common.builtInRemoteBuildCacheNode
 import common.gradleWrapper
-import configurations.buildJavaHome
 import jetbrains.buildServer.configs.kotlin.v2019_2.AbsoluteId
 import jetbrains.buildServer.configs.kotlin.v2019_2.BuildType
 import jetbrains.buildServer.configs.kotlin.v2019_2.CheckoutMode
@@ -31,7 +29,7 @@ object WarmupEc2Agent : BuildType({
 
     params {
         param("defaultBranchName", "master")
-        param("env.JAVA_HOME", buildJavaHome())
+        param("env.JAVA_HOME", LINUX.buildJavaHome())
     }
 
     steps {
@@ -39,8 +37,7 @@ object WarmupEc2Agent : BuildType({
             name = "Resolve all dependencies"
             tasks = "resolveAllDependencies"
             gradleParams = (
-                    buildToolGradleParameters(isContinue = false) +
-                    builtInRemoteBuildCacheNode.gradleParameters(Os.linux)
+                    buildToolGradleParameters(isContinue = false)
             ).joinToString(separator = " ")
         }
     }

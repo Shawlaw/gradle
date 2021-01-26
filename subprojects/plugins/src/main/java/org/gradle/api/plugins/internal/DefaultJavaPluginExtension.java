@@ -21,18 +21,25 @@ import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.capabilities.Capability;
 import org.gradle.api.component.SoftwareComponentContainer;
+import org.gradle.api.jvm.ModularitySpec;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.FeatureSpec;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.plugins.JavaPluginExtension;
-import org.gradle.api.plugins.PluginManager;
+import org.gradle.api.plugins.JavaResolutionConsistency;
+import org.gradle.api.plugins.jvm.internal.JvmPluginServices;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.internal.component.external.model.ProjectDerivedCapability;
+import org.gradle.internal.jvm.DefaultModularitySpec;
+import org.gradle.jvm.toolchain.JavaToolchainSpec;
 
+import javax.inject.Inject;
 import java.util.regex.Pattern;
 
 import static org.gradle.api.attributes.DocsType.JAVADOC;
@@ -46,22 +53,24 @@ public class DefaultJavaPluginExtension implements JavaPluginExtension {
     private final static Pattern VALID_FEATURE_NAME = Pattern.compile("[a-zA-Z0-9]+");
 
     private final JavaPluginConvention convention;
-    private final ConfigurationContainer configurations;
     private final ObjectFactory objectFactory;
-    private final PluginManager pluginManager;
     private final SoftwareComponentContainer components;
-    private final TaskContainer tasks;
     private final Project project;
+    private final ModularitySpec modularity;
+    private final JvmPluginServices jvmPluginServices;
+    private final JavaToolchainSpec toolchain;
 
     public DefaultJavaPluginExtension(JavaPluginConvention convention,
-                                      Project project) {
+                                      Project project,
+                                      JvmPluginServices jvmPluginServices,
+                                      JavaToolchainSpec toolchainSpec) {
         this.convention = convention;
-        this.configurations = project.getConfigurations();
         this.objectFactory = project.getObjects();
-        this.pluginManager = project.getPluginManager();
         this.components = project.getComponents();
-        this.tasks = project.getTasks();
         this.project = project;
+        this.modularity = objectFactory.newInstance(DefaultModularitySpec.class);
+        this.jvmPluginServices = jvmPluginServices;
+        this.toolchain = toolchainSpec;
     }
 
     @Override
@@ -88,13 +97,9 @@ public class DefaultJavaPluginExtension implements JavaPluginExtension {
     public void registerFeature(String name, Action<? super FeatureSpec> configureAction) {
         Capability defaultCapability = new ProjectDerivedCapability(project, name);
         DefaultJavaFeatureSpec spec = new DefaultJavaFeatureSpec(
-                validateFeatureName(name),
-                defaultCapability, convention,
-                configurations,
-                objectFactory,
-                pluginManager,
-                components,
-                tasks);
+            validateFeatureName(name),
+            defaultCapability,
+            jvmPluginServices);
         configureAction.execute(spec);
         spec.create();
     }
@@ -120,10 +125,83 @@ public class DefaultJavaPluginExtension implements JavaPluginExtension {
         configureDocumentationVariantWithArtifact(SOURCES_ELEMENTS_CONFIGURATION_NAME, null, SOURCES, ImmutableList.of(), main.getSourcesJarTaskName(), main.getAllSource(), findJavaComponent(components), configurations, tasks, objectFactory);
     }
 
+    @Override
+    public ModularitySpec getModularity() {
+        return modularity;
+    }
+
+    @Override
+    public JavaToolchainSpec getToolchain() {
+        return toolchain;
+    }
+
+    @Override
+    public JavaToolchainSpec toolchain(Action<? super JavaToolchainSpec> action) {
+        action.execute(toolchain);
+        return toolchain;
+    }
+
+    @Override
+    public void consistentResolution(Action<? super JavaResolutionConsistency> action) {
+        final ConfigurationContainer configurations = project.getConfigurations();
+        final SourceSetContainer sourceSets = convention.getSourceSets();
+
+        action.execute(project.getObjects().newInstance(DefaultJavaResolutionConsistency.class, sourceSets, configurations));
+    }
+
     private static String validateFeatureName(String name) {
         if (!VALID_FEATURE_NAME.matcher(name).matches()) {
             throw new InvalidUserDataException("Invalid feature name '" + name + "'. Must match " + VALID_FEATURE_NAME.pattern());
         }
         return name;
+    }
+
+    public static class DefaultJavaResolutionConsistency implements JavaResolutionConsistency {
+        private final Configuration mainCompileClasspath;
+        private final Configuration mainRuntimeClasspath;
+        private final Configuration testCompileClasspath;
+        private final Configuration testRuntimeClasspath;
+        private final SourceSetContainer sourceSets;
+        private final ConfigurationContainer configurations;
+
+        @Inject
+        public DefaultJavaResolutionConsistency(SourceSetContainer sourceSets, ConfigurationContainer configurations) {
+            this.sourceSets = sourceSets;
+            this.configurations = configurations;
+            SourceSet mainSourceSet = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+            SourceSet testSourceSet = sourceSets.getByName(SourceSet.TEST_SOURCE_SET_NAME);
+            mainCompileClasspath = findConfiguration(mainSourceSet.getCompileClasspathConfigurationName());
+            mainRuntimeClasspath = findConfiguration(mainSourceSet.getRuntimeClasspathConfigurationName());
+            testCompileClasspath = findConfiguration(testSourceSet.getCompileClasspathConfigurationName());
+            testRuntimeClasspath = findConfiguration(testSourceSet.getRuntimeClasspathConfigurationName());
+        }
+
+        @Override
+        public void useCompileClasspathVersions() {
+            sourceSets.configureEach(this::applyCompileClasspathConsistency);
+            testCompileClasspath.shouldResolveConsistentlyWith(mainCompileClasspath);
+        }
+
+        @Override
+        public void useRuntimeClasspathVersions() {
+            sourceSets.configureEach(this::applyRuntimeClasspathConsistency);
+            testRuntimeClasspath.shouldResolveConsistentlyWith(mainRuntimeClasspath);
+        }
+
+        private void applyCompileClasspathConsistency(SourceSet sourceSet) {
+            Configuration compileClasspath = findConfiguration(sourceSet.getCompileClasspathConfigurationName());
+            Configuration runtimeClasspath = findConfiguration(sourceSet.getRuntimeClasspathConfigurationName());
+            runtimeClasspath.shouldResolveConsistentlyWith(compileClasspath);
+        }
+
+        private void applyRuntimeClasspathConsistency(SourceSet sourceSet) {
+            Configuration compileClasspath = findConfiguration(sourceSet.getCompileClasspathConfigurationName());
+            Configuration runtimeClasspath = findConfiguration(sourceSet.getRuntimeClasspathConfigurationName());
+            compileClasspath.shouldResolveConsistentlyWith(runtimeClasspath);
+        }
+
+        private Configuration findConfiguration(String configName) {
+            return configurations.getByName(configName);
+        }
     }
 }

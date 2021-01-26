@@ -18,7 +18,6 @@ package org.gradle.api.internal.changedetection.state
 
 import org.gradle.api.tasks.incremental.IncrementalTaskInputs
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.work.InputChanges
 import spock.lang.Issue
 import spock.lang.Unroll
@@ -28,7 +27,7 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
 
     def "task is up-to-date after unrelated change to build script"() {
         file("input.txt") << "input"
-        buildFile << """
+        buildFile """
             task copy(type: Copy) {
                 from "input.txt"
                 destinationDir buildDir
@@ -53,7 +52,6 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
         skipped":copy"
     }
 
-    @ToBeFixedForInstantExecution
     def "task with type declared in build script is not up-to-date after build script change"() {
         file("input.txt") << "input"
 
@@ -81,10 +79,9 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
         then: skipped":copy"
     }
 
-    @ToBeFixedForInstantExecution
     def "task with action declared in build script is not up-to-date after build script change"() {
         file("input.txt") << "input"
-        buildFile << """
+        buildFile """
             task copy(type: Copy) {
                 from "input.txt"
                 destinationDir buildDir
@@ -119,7 +116,7 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
         file("input.txt") << "input"
 
         file("buildSrc/src/main/groovy/SimpleCopyTask.groovy") << declareSimpleCopyTaskType(false)
-        buildFile << """
+        buildFile """
             task copy(type: SimpleCopy) {
                 input = file("input.txt")
                 output = file("output.txt")
@@ -148,7 +145,6 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @Issue("https://issues.gradle.org/browse/GRADLE-1910")
-    @ToBeFixedForInstantExecution
     def "task declared in buildSrc is not up-to-date after dependencies change"() {
         file("input.txt") << "input"
 
@@ -156,7 +152,7 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
 
         file("buildSrc/build.gradle") << guavaDependency("15.0")
 
-        buildFile << """
+        buildFile """
             task copy(type: SimpleCopy) {
                 input = file("input.txt")
                 output = file("output.txt")
@@ -221,7 +217,7 @@ class TaskTypeUpToDateIntegrationTest extends AbstractIntegrationSpec {
         """
     }
 
-    private static String declareSimpleCopyTaskType(boolean modification  = false) {
+    private static String declareSimpleCopyTaskType(boolean modification = false) {
         """
             import org.gradle.api.*
             import org.gradle.api.tasks.*

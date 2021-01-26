@@ -22,11 +22,13 @@ import org.gradle.api.NonNullApi;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.artifacts.ArtifactView;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.dsl.DependencyHandler;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileCopyDetails;
+import org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFactory;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectPublicationRegistry;
 import org.gradle.api.internal.plugins.PluginDescriptor;
 import org.gradle.api.internal.project.ProjectInternal;
@@ -36,6 +38,7 @@ import org.gradle.api.plugins.JavaBasePlugin;
 import org.gradle.api.plugins.JavaLibraryPlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.ClasspathNormalizer;
 import org.gradle.api.tasks.Copy;
 import org.gradle.api.tasks.SourceSet;
@@ -44,7 +47,7 @@ import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.api.tasks.testing.Test;
 import org.gradle.internal.Describables;
 import org.gradle.internal.DisplayName;
-import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.component.local.model.OpaqueComponentIdentifier;
 import org.gradle.plugin.devel.GradlePluginDevelopmentExtension;
 import org.gradle.plugin.devel.PluginDeclaration;
 import org.gradle.plugin.devel.tasks.GeneratePluginDescriptors;
@@ -72,13 +75,13 @@ import java.util.concurrent.Callable;
  * be customized with the help of {@link GradlePluginDevelopmentExtension}.
  *
  * Integrates with the 'maven-publish' and 'ivy-publish' plugins to automatically publish the plugins so they can be resolved using the `pluginRepositories` and `plugins` DSL.
+ *
+ * @see <a href="https://docs.gradle.org/current/userguide/java_gradle_plugin.html">Gradle plugin development reference</a>
  */
 @SuppressWarnings({"deprecation", "DeprecatedIsStillUsed"})
 @NonNullApi
 public class JavaGradlePluginPlugin implements Plugin<Project> {
     private static final Logger LOGGER = Logging.getLogger(JavaGradlePluginPlugin.class);
-    @Deprecated
-    static final String COMPILE_CONFIGURATION = "compile";
     static final String API_CONFIGURATION = JavaPlugin.API_CONFIGURATION_NAME;
     static final String JAR_TASK = "jar";
     static final String PROCESS_RESOURCES_TASK = "processResources";
@@ -95,9 +98,6 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
     static final String PLUGIN_UNDER_TEST_METADATA_TASK_NAME = "pluginUnderTestMetadata";
     static final String GENERATE_PLUGIN_DESCRIPTORS_TASK_NAME = "pluginDescriptors";
     static final String VALIDATE_PLUGINS_TASK_NAME = "validatePlugins";
-
-    @Deprecated
-    static final String VALIDATE_TASK_PROPERTIES_TASK_NAME = "validateTaskProperties";
 
     /**
      * The task group used for tasks created by the Java Gradle plugin development plugin.
@@ -126,15 +126,6 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
      * @since 6.0
      */
     static final String VALIDATE_PLUGIN_TASK_DESCRIPTION = "Validates the plugin by checking parameter annotations on task and artifact transform types etc.";
-
-    /**
-     * The description for the task validating task property annotations for the plugin.
-     *
-     * @since 4.0
-     * @deprecated Use {@link #VALIDATE_PLUGIN_TASK_DESCRIPTION}.
-     */
-    @Deprecated
-    static final String VALIDATE_TASK_PROPERTIES_TASK_DESCRIPTION = "Validates task property annotations for the plugin. (Deprecated, use " + VALIDATE_PLUGINS_TASK_NAME + " instead.)";
 
     @Override
     public void apply(Project project) {
@@ -167,7 +158,8 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
             Set<String> classList = new HashSet<>();
             PluginDescriptorCollectorAction pluginDescriptorCollector = new PluginDescriptorCollectorAction(descriptors);
             ClassManifestCollectorAction classManifestCollector = new ClassManifestCollectorAction(classList);
-            PluginValidationAction pluginValidationAction = new PluginValidationAction(extension.getPlugins(), descriptors, classList);
+            Provider<Collection<PluginDeclaration>> pluginsProvider = project.provider(() -> extension.getPlugins().getAsMap().values());
+            PluginValidationAction pluginValidationAction = new PluginValidationAction(pluginsProvider, descriptors, classList);
 
             jarTask.filesMatching(PLUGIN_DESCRIPTOR_PATTERN, pluginDescriptorCollector);
             jarTask.filesMatching(CLASSES_PATTERN, classManifestCollector);
@@ -193,10 +185,20 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
             pluginUnderTestMetadataTask.setDescription(PLUGIN_UNDER_TEST_METADATA_TASK_DESCRIPTION);
 
             pluginUnderTestMetadataTask.getOutputDirectory().set(project.getLayout().getBuildDirectory().dir(pluginUnderTestMetadataTask.getName()));
-            pluginUnderTestMetadataTask.getPluginClasspath().from((Callable<Object>) () -> {
-                Configuration gradlePluginConfiguration = project.getConfigurations().detachedConfiguration(project.getDependencies().gradleApi());
-                FileCollection gradleApi = gradlePluginConfiguration.getIncoming().getFiles();
-                return extension.getPluginSourceSet().getRuntimeClasspath().minus(gradleApi);
+
+            pluginUnderTestMetadataTask.getPluginClasspath().from((Callable<FileCollection>) () -> {
+                SourceSet sourceSet = extension.getPluginSourceSet();
+                Configuration runtimeClasspath = project.getConfigurations().getByName(sourceSet.getRuntimeClasspathConfigurationName());
+                ArtifactView view = runtimeClasspath.getIncoming().artifactView(config -> {
+                    config.componentFilter(componentId -> {
+                        if (componentId instanceof OpaqueComponentIdentifier) {
+                            DependencyFactory.ClassPathNotation classPathNotation = ((OpaqueComponentIdentifier) componentId).getClassPathNotation();
+                            return classPathNotation != DependencyFactory.ClassPathNotation.GRADLE_API && classPathNotation != DependencyFactory.ClassPathNotation.LOCAL_GROOVY;
+                        }
+                        return true;
+                    });
+                });
+                return sourceSet.getOutput().plus(view.getFiles());
             });
         });
     }
@@ -238,16 +240,6 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
     }
 
     private void configurePluginValidations(Project project, GradlePluginDevelopmentExtension extension) {
-        TaskProvider<Task> naggerTask = project.getTasks().register("nagAboutValidateTaskProperties", task -> {
-            //noinspection Convert2Lambda - Shouldn't use lambdas for task actions
-            task.doFirst(new Action<Task>() {
-                @Override
-                public void execute(Task taskWithAction) {
-                    task.setDescription("Nag about task " + VALIDATE_TASK_PROPERTIES_TASK_NAME + " replaced by " + VALIDATE_PLUGINS_TASK_NAME);
-                    nagAboutDeprecatedValidateTaskPropertiesTask();
-                }
-            });
-        });
         TaskProvider<ValidatePlugins> validatorTask = project.getTasks().register(VALIDATE_PLUGINS_TASK_NAME, ValidatePlugins.class, task -> {
             task.setGroup(PLUGIN_DEVELOPMENT_GROUP);
             task.setDescription(VALIDATE_PLUGIN_TASK_DESCRIPTION);
@@ -256,34 +248,19 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
 
             task.getClasses().setFrom((Callable<Object>) () -> extension.getPluginSourceSet().getOutput().getClassesDirs());
             task.getClasspath().setFrom((Callable<Object>) () -> extension.getPluginSourceSet().getCompileClasspath());
-            task.mustRunAfter(naggerTask);
         });
-        project.getTasks().register(VALIDATE_TASK_PROPERTIES_TASK_NAME, org.gradle.plugin.devel.tasks.ValidateTaskProperties.class, validatorTask, (Runnable) JavaGradlePluginPlugin::nagAboutDeprecatedValidateTaskPropertiesTask)
-            .configure(task -> {
-                task.setDescription(VALIDATE_TASK_PROPERTIES_TASK_DESCRIPTION);
-                task.dependsOn(naggerTask, validatorTask);
-            });
-
         project.getTasks().named(JavaBasePlugin.CHECK_TASK_NAME, check -> check.dependsOn(validatorTask));
-    }
-
-    private static void nagAboutDeprecatedValidateTaskPropertiesTask() {
-        DeprecationLogger.deprecateTask(VALIDATE_TASK_PROPERTIES_TASK_NAME)
-            .replaceWith(VALIDATE_PLUGINS_TASK_NAME)
-            .willBeRemovedInGradle7()
-            .withUpgradeGuideSection(5, "plugin_validation_changes")
-            .nagUser();
     }
 
     /**
      * Implements plugin validation tasks to validate that a proper plugin jar is produced.
      */
     static class PluginValidationAction implements Action<Task> {
-        private final Collection<PluginDeclaration> plugins;
+        private final Provider<Collection<PluginDeclaration>> plugins;
         private final Collection<PluginDescriptor> descriptors;
         private final Set<String> classes;
 
-        PluginValidationAction(Collection<PluginDeclaration> plugins, @Nullable Collection<PluginDescriptor> descriptors, Set<String> classes) {
+        PluginValidationAction(Provider<Collection<PluginDeclaration>> plugins, @Nullable Collection<PluginDescriptor> descriptors, Set<String> classes) {
             this.plugins = plugins;
             this.descriptors = descriptors;
             this.classes = classes;
@@ -314,7 +291,7 @@ public class JavaGradlePluginPlugin implements Plugin<Project> {
                         LOGGER.warn(String.format(BAD_IMPL_CLASS_WARNING_MESSAGE, task.getPath(), pluginFileName, pluginImplementation));
                     }
                 }
-                for (PluginDeclaration declaration : plugins) {
+                for (PluginDeclaration declaration : plugins.get()) {
                     if (!pluginFileNames.contains(declaration.getId() + ".properties")) {
                         LOGGER.warn(String.format(DECLARED_PLUGIN_MISSING_MESSAGE, task.getPath(), declaration.getName(), declaration.getId()));
                     }

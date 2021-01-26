@@ -48,7 +48,6 @@ public enum JavaVersion {
      *
      * @since 6.0
      */
-    @Incubating
     VERSION_13,
 
     /**
@@ -56,16 +55,13 @@ public enum JavaVersion {
      *
      * @since 6.3
      */
-    @Incubating
     VERSION_14,
 
     /**
      * Java 15 major version.
-     * Not officially supported by Gradle. Use at your own risk.
      *
      * @since 6.3
      */
-    @Incubating
     VERSION_15,
 
     /**
@@ -74,7 +70,6 @@ public enum JavaVersion {
      *
      * @since 6.3
      */
-    @Incubating
     VERSION_16,
 
     /**
@@ -83,8 +78,34 @@ public enum JavaVersion {
      *
      * @since 6.3
      */
-    @Incubating
     VERSION_17,
+
+    /**
+     * Java 18 major version.
+     * Not officially supported by Gradle. Use at your own risk.
+     *
+     * @since 7.0
+     */
+    @Incubating
+    VERSION_18,
+
+    /**
+     * Java 19 major version.
+     * Not officially supported by Gradle. Use at your own risk.
+     *
+     * @since 7.0
+     */
+    @Incubating
+    VERSION_19,
+
+    /**
+     * Java 20 major version.
+     * Not officially supported by Gradle. Use at your own risk.
+     *
+     * @since 7.0
+     */
+    @Incubating
+    VERSION_20,
 
     /**
      * Higher version of Java.
@@ -114,6 +135,9 @@ public enum JavaVersion {
         }
         if (value instanceof JavaVersion) {
             return (JavaVersion) value;
+        }
+        if (value instanceof Integer) {
+            return getVersionForMajor((Integer) value);
         }
 
         String name = value.toString();
@@ -197,7 +221,6 @@ public enum JavaVersion {
      *
      * @since 5.0
      */
-    @Incubating
     public boolean isJava12() {
         return this == VERSION_12;
     }
@@ -240,7 +263,6 @@ public enum JavaVersion {
      *
      * @since 5.0
      */
-    @Incubating
     public boolean isJava12Compatible() {
         return isCompatibleWith(VERSION_12);
     }
@@ -250,7 +272,6 @@ public enum JavaVersion {
      *
      * @since 6.0
      */
-    @Incubating
     public boolean isCompatibleWith(JavaVersion otherVersion) {
         return this.compareTo(otherVersion) >= 0;
     }

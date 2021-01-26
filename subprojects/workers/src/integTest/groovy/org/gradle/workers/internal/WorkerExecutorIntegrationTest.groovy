@@ -17,19 +17,16 @@
 package org.gradle.workers.internal
 
 import org.gradle.integtests.fixtures.BuildOperationsFixture
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.test.fixtures.server.http.BlockingHttpServer
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
-import org.gradle.workers.IsolationMode
 import org.gradle.workers.fixtures.WorkerExecutorFixture
 import org.junit.Rule
 import spock.lang.Issue
 import spock.lang.Unroll
 
 import static org.gradle.workers.fixtures.WorkerExecutorFixture.ISOLATION_MODES
-import static org.gradle.workers.fixtures.WorkerExecutorFixture.WORKER_METHODS
 
 @IntegrationTestTimeout(120)
 @Unroll
@@ -108,7 +105,6 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         isolationMode << ISOLATION_MODES
     }
 
-    @ToBeFixedForInstantExecution(iterationMatchers = ".*PROCESS")
     def "can create and use a work action defined in an external jar in #isolationMode"() {
         def workActionJarName = "workAction.jar"
         withWorkActionClassInExternalJar(file(workActionJarName))
@@ -146,17 +142,57 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         isolationMode << ISOLATION_MODES
     }
 
+    @Issue("https://github.com/gradle/gradle/issues/12636")
+    def "can use work actions from multiple projects when running with --parallel"() {
+        settingsFile << """
+            include('project1')
+            include('project2')
+            include('project3')
+            include('project4')
+            include('project5')
+        """
+        buildFile << """
+            abstract class SubmitsAndWaits extends DefaultTask {
+                @Inject
+                abstract WorkerExecutor getWorkerExecutor()
+
+                @TaskAction
+                def go() {
+                    workerExecutor.noIsolation().submit(SomeWork) { }
+                    workerExecutor.noIsolation().submit(SomeWork) { }
+                    workerExecutor.await()
+                }
+            }
+
+            abstract class SomeWork implements WorkAction<WorkParameters.None> {
+                void execute() {
+                    Thread.sleep(50)
+                }
+            }
+
+            allprojects {
+                task run(type: SubmitsAndWaits)
+            }
+        """
+
+        when:
+        succeeds("run", "--parallel")
+
+        then:
+        noExceptionThrown()
+    }
+
     def "re-uses an existing idle worker daemon"() {
         executer.withWorkerDaemonsExpirationDisabled()
         fixture.withWorkActionClassInBuildSrc()
 
         buildFile << """
             task runInDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task reuseDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 dependsOn runInDaemon
             }
         """
@@ -176,7 +212,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
             task startNewDaemon(type: WorkerTask) {
                 dependsOn runInDaemon
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
 
                 // Force a new daemon to be used
                 additionalForkOptions = {
@@ -201,7 +237,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             ext.memoryHog = new byte[1024*1024*150] // ~150MB
 
             tasks.withType(WorkerTask) { task ->
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 // Force a new daemon to be used
                 additionalForkOptions = {
                     it.systemProperty("foobar", task.name)
@@ -232,12 +268,12 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
         buildFile << """
             task runInDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 workActionClass = BlockingWorkAction.class
             }
 
             task startNewDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 workActionClass = BlockingWorkAction.class
             }
 
@@ -260,11 +296,11 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
         buildFile << """
             task runInDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task reuseDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 workActionClass = AlternateWorkAction.class
                 dependsOn runInDaemon
             }
@@ -277,7 +313,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         assertSameDaemonWasUsed("runInDaemon", "reuseDaemon")
     }
 
-    def "throws if worker used from a thread with no current build operation in #isolationMode"() {
+    def "throws if worker used from a thread with no current build operation in #workerMethod"() {
         given:
         fixture.withWorkActionClassInBuildSrc()
 
@@ -291,7 +327,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                         @Override
                         public void run() {
                             try {
-                                workerExecutor."${workerMethod}"({ config ->
+                                workerExecutor.${workerMethod}({ config ->
                                     if (config instanceof ProcessWorkerSpec) {
                                         forkOptions.maxHeapSize = "64m"
                                         forkOptions(additionalForkOptions)
@@ -327,7 +363,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         failure.assertHasCause 'An attempt was made to submit work from a thread not managed by Gradle.  Work may only be submitted from a Gradle-managed thread.'
 
         where:
-        workerMethod << WORKER_METHODS.values().toUnique()
+        workerMethod << ISOLATION_MODES
     }
 
     def "uses an inferred display name for work items in #isolationMode"() {
@@ -394,7 +430,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         isolationMode << ISOLATION_MODES
     }
 
-    def "classloader is not isolated when using IsolationMode.NONE"() {
+    def "classloader is not isolated when using noIsolation"() {
         fixture.withWorkActionClassInBuildScript()
 
         buildFile << """
@@ -413,7 +449,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
             task mutateValue(type: WorkerTask) {
                 list = [ "bar" ]
-                isolationMode = IsolationMode.NONE
+                isolationMode = 'noIsolation'
                 workActionClass = MutatingWorkAction.class
             }
 
@@ -429,7 +465,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         succeeds "verifyNotIsolated"
     }
 
-    def "user classes are isolated when using IsolationMode.CLASSLOADER"() {
+    def "user classes are isolated when using classLoaderIsolation"() {
         fixture.withWorkActionClassInBuildScript()
 
         buildFile << """
@@ -448,7 +484,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
             task mutateValue(type: WorkerTask) {
                 list = [ "bar" ]
-                isolationMode = IsolationMode.CLASSLOADER
+                isolationMode = 'classLoaderIsolation'
                 workActionClass = MutatingWorkAction.class
             }
 
@@ -507,7 +543,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             }
 
             task checkGuavaVersion(type: WorkerTask) {
-                isolationMode = IsolationMode.${isolationMode}
+                isolationMode = '$isolationMode'
                 workActionClass = GuavaVersionWorkAction.class
                 additionalClasspath = configurations.customGuava
             }
@@ -520,7 +556,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         outputContains("Guava version: 23.1.0.jre")
 
         where:
-        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+        isolationMode << ['classLoaderIsolation', 'processIsolation']
     }
 
     def "classloader is minimal when using #isolationMode"() {
@@ -556,7 +592,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             }
 
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.$isolationMode
+                isolationMode = '$isolationMode'
                 workActionClass = SneakyWorkAction
             }
         """
@@ -567,7 +603,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         assertWorkerExecuted("runInWorker")
 
         where:
-        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+        isolationMode << ['classLoaderIsolation', 'processIsolation']
     }
 
     @Requires(TestPrecondition.NOT_WINDOWS)
@@ -596,7 +632,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             }
 
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.${isolationMode}
+                isolationMode = '${isolationMode}'
                 workActionClass = ResourceWorkAction
                 additionalClasspath = tasks.jarFoo.outputs.files
                 dependsOn jarFoo
@@ -610,7 +646,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         assertWorkerExecuted("runInWorker")
 
         where:
-        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+        isolationMode << ['classLoaderIsolation', 'processIsolation']
     }
 
     def "workers that change the context classloader don't affect future work in #isolationMode"() {

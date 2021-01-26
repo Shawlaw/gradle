@@ -71,7 +71,7 @@ latch.await()
 
     }
 
-    void buildWasCancelled(TestResultHandler resultHandler, String failureMessage = 'Could not execute build using Gradle') {
+    void buildWasCancelled(TestResultHandler resultHandler, String failureMessage = 'Could not execute build using') {
         resultHandler.assertFailedWith(BuildCancelledException)
         assert resultHandler.failure.message.startsWith(failureMessage)
 
@@ -84,7 +84,7 @@ latch.await()
         assertHasBuildFailedLogging()
     }
 
-    private static void targetIsGradle51OrLater() {
+    private void targetIsGradle51OrLater() {
         targetVersion >= GradleVersion.version('5.1')
     }
 
@@ -114,7 +114,7 @@ latch.await()
 
     void taskWasCancelled(TestResultHandler resultHandler, String taskPath) {
         resultHandler.assertFailedWith(BuildCancelledException)
-        assert resultHandler.failure.message.startsWith("Could not execute build using Gradle")
+        assert resultHandler.failure.message.startsWith("Could not execute build using")
 
         if (targetDist.toolingApiRetainsOriginalFailureOnCancel) {
             if (targetDist.toolingApiDoesNotAddCausesOnTaskCancel) {

@@ -16,9 +16,11 @@
 package org.gradle.integtests
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 
 class GroovyProjectIntegrationTest extends AbstractIntegrationSpec {
-    
+
+    @ToBeFixedForConfigurationCache(because = "gradle/configuration-cache#270")
     def handlesJavaSourceOnly() {
         given:
         buildFile << "apply plugin: 'groovy'"
@@ -26,11 +28,41 @@ class GroovyProjectIntegrationTest extends AbstractIntegrationSpec {
         and:
         file("src/main/java/somepackage/SomeClass.java") << "public class SomeClass { }"
         file("settings.gradle") << "rootProject.name='javaOnly'"
-        
+
         when:
         run "build"
 
         then:
         file("build/libs/javaOnly.jar").exists()
+    }
+
+    def "supports central repository declaration"() {
+        given:
+        buildFile << """
+plugins {
+    id 'groovy'
+}
+
+dependencies {
+    implementation 'org.codehaus.groovy:groovy-all:2.5.13'
+}
+"""
+        settingsFile << """
+rootProject.name = 'groovyCompilation'
+dependencyResolutionManagement {
+    repositories {
+        ${jcenterRepository()}
+    }
+}
+"""
+        and:
+        file('src/main/groovy/Test.groovy') << """
+class Test { }
+"""
+        when:
+        succeeds 'compileGroovy'
+
+        then:
+        executedAndNotSkipped(':compileGroovy')
     }
 }

@@ -16,11 +16,15 @@
 
 package org.gradle.integtests.publish.ivy
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 
-class IvySingleProjectPublishIntegrationTest extends AbstractIntegrationSpec {
-    @ToBeFixedForInstantExecution
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+
+class IvySingleProjectPublishIntegrationTest extends AbstractLegacyIvyPublishTest {
+    def setup() {
+        configureUploadTask("publish")
+    }
+
+    @ToBeFixedForConfigurationCache
     def "publish multiple artifacts in single configuration"() {
         settingsFile << "rootProject.name = 'publishTest'"
         file("file1") << "some content"
@@ -72,7 +76,7 @@ uploadPublish {
         ivyDescriptor.expectArtifact("jar2").conf == ["publish"]
     }
 
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache
     def "publish classified artifact"() {
         settingsFile << "rootProject.name = 'publishTest'"
         file("file1") << "some content"
@@ -116,8 +120,10 @@ uploadPublish {
         ivyDescriptor.expectArtifact("jar1").classifier == "classy"
     }
 
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache
     def "publish multiple artifacts in separate configurations"() {
+        configureUploadTask('publish1')
+        configureUploadTask('publish2')
         file("settings.gradle") << "rootProject.name = 'publishTest'"
         file("file1") << "some content"
         file("file2") << "other content"

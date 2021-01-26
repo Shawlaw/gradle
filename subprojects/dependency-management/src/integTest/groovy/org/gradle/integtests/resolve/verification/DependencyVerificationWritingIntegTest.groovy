@@ -17,7 +17,7 @@
 package org.gradle.integtests.resolve.verification
 
 import org.gradle.api.internal.artifacts.ivyservice.CacheLayout
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.cache.CachingIntegrationFixture
 import org.gradle.test.fixtures.maven.MavenFileModule
 import org.gradle.test.fixtures.maven.MavenFileRepository
@@ -41,8 +41,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         assertMetadataExists()
         hasNoModules()
 
-        and:
-        output.contains("Dependency verification is an incubating feature.")
     }
 
     @Unroll
@@ -112,7 +110,7 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         }
     }
 
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache
     @Unroll
     def "generates verification file for dependencies downloaded in previous build (stop in between = #stop)"() {
         given:
@@ -391,7 +389,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         hasModules([])
     }
 
-    @ToBeFixedForInstantExecution
     def "writes checksums of plugins using plugins block"() {
         given:
         addPlugin()
@@ -419,7 +416,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         hasModules(["test-plugin:test-plugin.gradle.plugin", "com:myplugin"])
     }
 
-    @ToBeFixedForInstantExecution
     def "writes checksums of plugins using buildscript block"() {
         given:
         addPlugin()
@@ -629,7 +625,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
 """
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "included build dependencies are used when generating the verification file"() {
         given:
         javaLibrary()
@@ -919,7 +914,7 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         javaLibrary()
         uncheckedModule("org", "foo")
         uncheckedModule("org", "bar", "1.0") {
-            artifact(classifier:'classy')
+            artifact(classifier: 'classy')
         }
         buildFile << """
             dependencies {
@@ -1015,7 +1010,7 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         )
         MavenFileModule otherFile = alternateRepo.module("org", "foo", "1.0")
             .publish()
-        otherFile.artifactFile.bytes = [0,0,0,0]
+        otherFile.artifactFile.bytes = [0, 0, 0, 0]
 
         buildFile << """
             dependencies {
@@ -1143,7 +1138,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         }
     }
 
-    @ToBeFixedForInstantExecution
     def "can use --dry-run to write a different file for comparison"() {
         given:
         javaLibrary()
@@ -1245,7 +1239,6 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
 """
     }
 
-    @ToBeFixedForInstantExecution
     def "doesn't write verification metadata for skipped configurations"() {
         javaLibrary()
         uncheckedModule("org", "foo")
@@ -1313,15 +1306,8 @@ class DependencyVerificationWritingIntegTest extends AbstractDependencyVerificat
         run ":help", "--offline"
 
         then:
-        hasModules(["org:foo"])
+        hasModules(artifact == 'pom' ? [] : ["org:foo"])
 
-        and:
-        if (artifact == 'pom') {
-            // there's a technical limitation due to the code path used for regular artifacts
-            // which makes it that we don't even try to snapshot if the file is missing so we can't
-            // provide an error message
-            outputContains("Cannot compute checksum for")
-        }
         where:
         artifact << ['jar', 'pom']
     }

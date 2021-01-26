@@ -19,6 +19,7 @@ package org.gradle.launcher.daemon.configuration;
 import org.gradle.internal.buildoption.BooleanBuildOption;
 import org.gradle.internal.buildoption.BooleanCommandLineOptionConfiguration;
 import org.gradle.internal.buildoption.BuildOption;
+import org.gradle.internal.buildoption.BuildOptionSet;
 import org.gradle.internal.buildoption.CommandLineOptionConfiguration;
 import org.gradle.internal.buildoption.EnabledOnlyBooleanBuildOption;
 import org.gradle.internal.buildoption.Origin;
@@ -34,7 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-public class DaemonBuildOptions {
+public class DaemonBuildOptions extends BuildOptionSet<DaemonParameters> {
 
     private static List<BuildOption<DaemonParameters>> options;
 
@@ -58,8 +59,9 @@ public class DaemonBuildOptions {
         return options;
     }
 
-    private DaemonBuildOptions() {
-
+    @Override
+    public List<? extends BuildOption<? super DaemonParameters>> getAllOptions() {
+        return options;
     }
 
     public static class IdleTimeoutOption extends StringBuildOption<DaemonParameters> {
@@ -208,7 +210,7 @@ public class DaemonBuildOptions {
         public static final String GRADLE_PROPERTY = "org.gradle.priority";
 
         public PriorityOption() {
-            super(GRADLE_PROPERTY, CommandLineOptionConfiguration.create("priority", "Specifies the scheduling priority for the Gradle daemon and all processes launched by it. Values are 'normal' (default) or 'low'").incubating());
+            super(GRADLE_PROPERTY, CommandLineOptionConfiguration.create("priority", "Specifies the scheduling priority for the Gradle daemon and all processes launched by it. Values are 'normal' (default) or 'low'"));
         }
 
         @Override

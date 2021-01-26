@@ -17,7 +17,6 @@
 package org.gradle.api.artifacts;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -28,7 +27,9 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * Examples:
  * <pre class='autoTested'>
- * apply plugin: 'java' //so that there are some configurations
+ * plugins {
+ *     id 'java' // so that there are some configurations
+ * }
  *
  * configurations.all {
  *   resolutionStrategy {
@@ -70,7 +71,9 @@ public interface ResolutionStrategy {
      * The check includes both first level and transitive dependencies. See example below:
      *
      * <pre class='autoTested'>
-     * apply plugin: 'java' //so that there are some configurations
+     * plugins {
+     *     id 'java' // so that there are some configurations
+     * }
      *
      * configurations.all {
      *   resolutionStrategy.failOnVersionConflict()
@@ -94,7 +97,6 @@ public interface ResolutionStrategy {
      * @return this resolution strategy
      * @since 6.1
      */
-    @Incubating
     ResolutionStrategy failOnDynamicVersions();
 
     /**
@@ -106,7 +108,6 @@ public interface ResolutionStrategy {
      * @return this resolution strategy
      * @since 6.1
      */
-    @Incubating
     ResolutionStrategy failOnChangingVersions();
 
     /**
@@ -120,7 +121,6 @@ public interface ResolutionStrategy {
      * @return this resolution strategy
      * @since 6.1
      */
-    @Incubating
     ResolutionStrategy failOnNonReproducibleResolution();
 
     /**
@@ -129,7 +129,9 @@ public interface ResolutionStrategy {
      * This applies to both first level and transitive dependencies. See example below:
      *
      * <pre class='autoTested'>
-     * apply plugin: 'java' //so that there are some configurations
+     * plugins {
+     *     id 'java' // so that there are some configurations
+     * }
      *
      * configurations.all {
      *   resolutionStrategy.preferProjectModules()
@@ -156,7 +158,6 @@ public interface ResolutionStrategy {
      * @return this resolution strategy instance
      * @since 6.0
      */
-    @Incubating
     ResolutionStrategy deactivateDependencyLocking();
 
 
@@ -168,7 +169,6 @@ public interface ResolutionStrategy {
      *
      * @since 6.2
      */
-    @Incubating
     ResolutionStrategy disableDependencyVerification();
 
     /**
@@ -176,7 +176,6 @@ public interface ResolutionStrategy {
      *
      * @since 6.2
      */
-    @Incubating
     ResolutionStrategy enableDependencyVerification();
 
     /**
@@ -191,7 +190,9 @@ public interface ResolutionStrategy {
      * </ul>
      * Example:
      * <pre class='autoTested'>
-     * apply plugin: 'java' //so that there are some configurations
+     * plugins {
+     *     id 'java' // so that there are some configurations
+     * }
      *
      * configurations.all {
      *   resolutionStrategy.force 'asm:asm-all:3.3.1', 'commons-io:commons-io:1.4'
@@ -212,7 +213,9 @@ public interface ResolutionStrategy {
      * <p>
      * Example:
      * <pre class='autoTested'>
-     * apply plugin: 'java' //so that there are some configurations
+     * plugins {
+     *     id 'java' // so that there are some configurations
+     * }
      *
      * configurations.all {
      *   resolutionStrategy.forcedModules = ['asm:asm-all:3.3.1', 'commons-io:commons-io:1.4']
@@ -324,7 +327,7 @@ public interface ResolutionStrategy {
     ComponentSelectionRules getComponentSelection();
 
     /**
-     * The componentSelection block provides rules to filter or blacklist certain components from appearing in the resolution result.
+     * The componentSelection block provides rules to filter or prevent certain components from appearing in the resolution result.
      *
      * @param action Action to be applied to the {@link ComponentSelectionRules}
      * @return this ResolutionStrategy instance
@@ -386,7 +389,6 @@ public interface ResolutionStrategy {
      * @return this resolution strategy
      * @since 5.6
      */
-    @Incubating
     ResolutionStrategy capabilitiesResolution(Action<? super CapabilitiesResolution> action);
 
     /**
@@ -394,7 +396,6 @@ public interface ResolutionStrategy {
      *
      * @since 5.6
      */
-    @Incubating
     CapabilitiesResolution getCapabilitiesResolution();
 
     /**

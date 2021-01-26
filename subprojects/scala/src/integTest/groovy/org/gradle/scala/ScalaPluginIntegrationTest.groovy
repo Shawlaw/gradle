@@ -15,9 +15,9 @@
  */
 package org.gradle.scala
 
+import org.gradle.api.plugins.scala.ScalaBasePlugin
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
-import org.gradle.language.scala.internal.toolchain.DefaultScalaToolProvider
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import spock.lang.Issue
 
 import static org.hamcrest.CoreMatchers.containsString
@@ -192,33 +192,7 @@ task someTask
         file("ear/build/tmp/ear/application.xml").assertContents(not(containsString("implementationScala.mapping")))
     }
 
-    @Issue("https://github.com/gradle/gradle/issues/6849")
-    @ToBeFixedForInstantExecution
-    def "can publish test-only projects"() {
-        using m2
-        settingsFile << """
-            rootProject.name = "scala"
-        """
-        buildFile << """
-            apply plugin: 'scala'
-            apply plugin: 'maven'
-
-            repositories {
-                ${jcenterRepository()}
-            }
-            dependencies {
-                implementation("org.scala-lang:scala-library:2.12.6")
-            }
-        """
-        file("src/test/scala/Foo.scala") << """
-            class Foo
-        """
-        expect:
-        executer.expectDeprecationWarning()
-        succeeds("install")
-    }
-
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache
     def "forcing an incompatible version of Scala fails with a clear error message"() {
         settingsFile << """
             rootProject.name = "scala"
@@ -244,9 +218,10 @@ task someTask
 
         then:
         failureHasCause("The version of 'scala-library' was changed while using the default Zinc version." +
-            " Version 2.10.7 is not compatible with org.scala-sbt:zinc_2.12:" + DefaultScalaToolProvider.DEFAULT_ZINC_VERSION)
+            " Version 2.10.7 is not compatible with org.scala-sbt:zinc_2.12:" + ScalaBasePlugin.DEFAULT_ZINC_VERSION)
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "trying to use an old version of Zinc switches to Gradle-supported version"() {
         settingsFile << """
             rootProject.name = "scala"

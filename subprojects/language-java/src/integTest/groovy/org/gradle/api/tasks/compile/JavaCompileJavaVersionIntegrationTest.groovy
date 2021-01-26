@@ -18,7 +18,6 @@ package org.gradle.api.tasks.compile
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.AvailableJavaHomes
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.internal.jvm.Jvm
 import org.gradle.util.Requires
 import org.gradle.util.TextUtil
@@ -71,10 +70,9 @@ class JavaCompileJavaVersionIntegrationTest extends AbstractIntegrationSpec {
         succeeds "compileJava", "--info"
         then:
         executedAndNotSkipped ":compileJava"
-        output.contains "Value of input property 'toolChain.version' has changed for task ':compileJava'"
+        output.contains "Value of input property 'javaVersion' has changed for task ':compileJava'"
     }
 
-    @ToBeFixedForInstantExecution
     def "not up-to-date when java version for forking changes"() {
         given:
         def jdk8 = AvailableJavaHomes.getJdk(VERSION_1_8)
@@ -107,7 +105,7 @@ class JavaCompileJavaVersionIntegrationTest extends AbstractIntegrationSpec {
         succeeds "compileJava", "--info"
         then:
         executedAndNotSkipped ":compileJava"
-        output.contains "Value of input property 'toolChain.version' has changed for task ':compileJava'"
+        output.contains "Value of input property 'javaVersion' has changed for task ':compileJava'"
     }
 
     private static String forkedJavaCompilation(Jvm jdk) {

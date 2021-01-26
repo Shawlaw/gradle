@@ -18,14 +18,12 @@ package org.gradle.plugins.signing;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.DomainObjectCollection;
-import org.gradle.api.Incubating;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.PublishArtifact;
-import org.gradle.api.artifacts.maven.MavenDeployment;
 import org.gradle.api.internal.ConventionMapping;
 import org.gradle.api.internal.IConventionAware;
 import org.gradle.api.model.ObjectFactory;
@@ -33,6 +31,7 @@ import org.gradle.api.publish.Publication;
 import org.gradle.api.publish.PublicationArtifact;
 import org.gradle.api.publish.internal.PublicationInternal;
 import org.gradle.api.tasks.TaskContainer;
+import org.gradle.internal.Cast;
 import org.gradle.plugins.signing.internal.SignOperationInternal;
 import org.gradle.plugins.signing.signatory.Signatory;
 import org.gradle.plugins.signing.signatory.SignatoryProvider;
@@ -125,7 +124,7 @@ public class SigningExtension {
      *
      * <pre>
      * signing {
-     *   required = { gradle.taskGraph.hasTask("uploadArchives") }
+     *   required = { gradle.taskGraph.hasTask("publish") }
      * }
      * </pre>
      *
@@ -246,7 +245,6 @@ public class SigningExtension {
      *
      * @since 5.4
      */
-    @Incubating
     public void useInMemoryPgpKeys(@Nullable String defaultSecretKey, @Nullable String defaultPassword) {
         setSignatories(new InMemoryPgpSignatoryProvider(defaultSecretKey, defaultPassword));
     }
@@ -267,7 +265,6 @@ public class SigningExtension {
      *
      * @since 6.0
      */
-    @Incubating
     public void useInMemoryPgpKeys(@Nullable String defaultKeyId, @Nullable String defaultSecretKey, @Nullable String defaultPassword) {
         setSignatories(new InMemoryPgpSignatoryProvider(defaultKeyId, defaultSecretKey, defaultPassword));
     }
@@ -424,7 +421,7 @@ public class SigningExtension {
         signTask.getSignatures().all(new Action<Signature>() {
             @Override
             public void execute(final Signature signature) {
-                T artifact = publicationToSign.addDerivedArtifact((T) signature.getSource(), new DefaultDerivedArtifactFile(signature, signTask));
+                T artifact = publicationToSign.addDerivedArtifact(Cast.uncheckedNonnullCast(signature.getSource()), new DefaultDerivedArtifactFile(signature, signTask));
                 artifact.builtBy(signTask);
                 artifacts.put(signature, artifact);
             }
@@ -531,92 +528,6 @@ public class SigningExtension {
      */
     public SignOperation sign(Closure closure) {
         return doSignOperation(closure);
-    }
-
-    /**
-     * Signs the POM artifact for the given Maven deployment.
-     *
-     * <p>You can use this method to sign the generated POM when publishing to a Maven repository with the Maven plugin. </p>
-     * <pre class='autoTestedWithDeprecations'>
-     * apply plugin: 'maven'
-     *
-     * uploadArchives {
-     *   repositories {
-     *     mavenDeployer {
-     *       beforeDeployment { MavenDeployment deployment -&gt;
-     *         signing.signPom(deployment)
-     *       }
-     *     }
-     *   }
-     * }
-     * </pre>
-     * <p>You can optionally provide a configuration closure to fine tune the {@link SignOperation sign
-     * operation} for the POM.</p> <p> If {@link #isRequired()} is false and the signature cannot be generated (e.g. no configured signatory), this method will silently do nothing. That is, a
-     * signature for the POM file will not be uploaded.
-     * <p>
-     *
-     * @param mavenDeployment The deployment to sign the POM of
-     * @param closure the configuration of the underlying {@link SignOperation sign operation} for the POM (optional)
-     * @return the generated signature artifact
-     *
-     * @deprecated Use {@link #sign(Publication...)} instead
-     */
-    @Deprecated
-    public Signature signPom(final MavenDeployment mavenDeployment, final Closure closure) {
-        SignOperation signOperation = doSignOperation(new Action<SignOperation>() {
-            @Override
-            public void execute(SignOperation so) {
-                so.sign(mavenDeployment.getPomArtifact());
-                so.configure(closure);
-            }
-        });
-
-        Signature pomSignature = signOperation.getSingleSignature();
-        if (!pomSignature.getFile().exists()) {
-            // This means that the signature was not required and we couldn't generate the signature
-            // (most likely project.required == false and there is no signatory)
-            // So just noop
-            return null;
-        }
-
-        // Have to alter the "type" of the artifact to match what is published
-        // See https://issues.gradle.org/browse/GRADLE-1589
-        pomSignature.setType("pom." + pomSignature.getSignatureType().getExtension());
-        mavenDeployment.addArtifact(pomSignature);
-        return pomSignature;
-    }
-
-    /**
-     * Signs the POM artifact for the given Maven deployment.
-     *
-     * <p>You can use this method to sign the generated POM when publishing to a Maven repository with the Maven plugin. </p>
-     * <pre class='autoTestedWithDeprecations'>
-     * apply plugin: 'maven'
-     *
-     * uploadArchives {
-     *   repositories {
-     *     mavenDeployer {
-     *       beforeDeployment { MavenDeployment deployment -&gt;
-     *         signing.signPom(deployment)
-     *       }
-     *     }
-     *   }
-     * }
-     * </pre>
-     * <p>You can optionally provide a configuration closure to fine tune the {@link SignOperation sign
-     * operation} for the POM.</p> <p> If {@link #isRequired()} is false and the signature cannot be generated (e.g. no configured signatory), this method will silently do nothing. That is, a
-     * signature for the POM file will not be uploaded.
-     * <p>
-     * <b>Note:</b> Signing the generated POM file generated by the Maven Publishing plugin is currently not supported. Future versions of Gradle might add this functionality.
-     *
-     * @param mavenDeployment The deployment to sign the POM of
-     * @return the generated signature artifact
-     *
-     * @deprecated Use {@link #sign(Publication...)} instead
-     */
-    @Deprecated
-    public Signature signPom(MavenDeployment mavenDeployment) {
-        return signPom(mavenDeployment, null);
     }
 
     protected SignOperation doSignOperation(final Closure setup) {

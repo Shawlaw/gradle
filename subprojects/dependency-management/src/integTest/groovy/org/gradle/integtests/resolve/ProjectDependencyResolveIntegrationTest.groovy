@@ -17,13 +17,12 @@ package org.gradle.integtests.resolve
 
 import groovy.transform.NotYetImplemented
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.FluidDependenciesResolveRunner
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+import org.gradle.integtests.fixtures.extensions.FluidDependenciesResolveTest
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
-import org.junit.runner.RunWith
 import spock.lang.Issue
 
-@RunWith(FluidDependenciesResolveRunner)
+@FluidDependenciesResolveTest
 class ProjectDependencyResolveIntegrationTest extends AbstractIntegrationSpec {
     def setup() {
         new ResolveTestFixture(buildFile, "compile").addDefaultVariantDerivationStrategy()
@@ -362,6 +361,7 @@ project(":b") {
         executedAndNotSkipped ":a:yJar"
     }
 
+    @ToBeFixedForConfigurationCache
     def "reports project dependency that refers to an unknown artifact"() {
         given:
         file('settings.gradle') << """
@@ -586,7 +586,7 @@ project('c') {
         file("b/build/copied/a-1.0.zip").exists()
     }
 
-    @ToBeFixedForInstantExecution(because = "Task.getProject() during execution")
+    @ToBeFixedForConfigurationCache(because = "Task.getProject() during execution")
     def "resolving configuration with project dependency marks dependency's configuration as observed"() {
         settingsFile << "include 'api'; include 'impl'"
 

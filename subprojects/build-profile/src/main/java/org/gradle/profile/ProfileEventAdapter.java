@@ -50,10 +50,11 @@ public class ProfileEventAdapter implements InternalBuildListener, ProjectEvalua
     }
 
     // BuildListener
+
     @Override
-    public void buildStarted(Gradle gradle) {
+    public void beforeSettings(Settings settings) {
         long now = clock.getCurrentTime();
-        buildProfile = new BuildProfile(gradle.getStartParameter());
+        buildProfile = new BuildProfile(settings.getStartParameter());
         buildProfile.setBuildStarted(now);
         buildProfile.setProfilingStarted(buildStartedTime.getStartTime());
     }
@@ -106,14 +107,14 @@ public class ProfileEventAdapter implements InternalBuildListener, ProjectEvalua
 
     // TaskListenerInternal
     @Override
-    public void beforeExecute(TaskIdentity taskIdentity) {
+    public void beforeExecute(TaskIdentity<?> taskIdentity) {
         long now = clock.getCurrentTime();
         ProjectProfile projectProfile = buildProfile.getProjectProfile(taskIdentity.getProjectPath());
         projectProfile.getTaskProfile(taskIdentity.getTaskPath()).setStart(now);
     }
 
     @Override
-    public void afterExecute(TaskIdentity taskIdentity, TaskState state) {
+    public void afterExecute(TaskIdentity<?> taskIdentity, TaskState state) {
         long now = clock.getCurrentTime();
         ProjectProfile projectProfile = buildProfile.getProjectProfile(taskIdentity.getProjectPath());
         TaskExecution taskExecution = projectProfile.getTaskProfile(taskIdentity.getTaskPath());

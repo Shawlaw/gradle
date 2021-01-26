@@ -34,7 +34,7 @@ import org.gradle.util.Path;
  */
 public class DefaultSettingsLoader implements SettingsLoader {
     public static final String BUILD_SRC_PROJECT_PATH = ":" + SettingsInternal.BUILD_SRC;
-    private SettingsProcessor settingsProcessor;
+    private final SettingsProcessor settingsProcessor;
     private final BuildLayoutFactory buildLayoutFactory;
     private final GradlePropertiesController gradlePropertiesController;
 
@@ -89,8 +89,10 @@ public class DefaultSettingsLoader implements SettingsLoader {
     }
 
     private SettingsInternal createEmptySettings(GradleInternal gradle, StartParameter startParameter, ClassLoaderScope classLoaderScope) {
-        StartParameter noSearchParameter = startParameter.newInstance();
-        ((StartParameterInternal) noSearchParameter).useEmptySettingsWithoutDeprecationWarning();
+        StartParameterInternal noSearchParameter = (StartParameterInternal) startParameter.newInstance();
+        noSearchParameter.setSettingsFile(null);
+        noSearchParameter.useEmptySettings();
+        noSearchParameter.doNotSearchUpwards();
         BuildLayout layout = buildLayoutFactory.getLayoutFor(new BuildLayoutConfiguration(noSearchParameter));
         SettingsInternal settings = findSettingsAndLoadIfAppropriate(gradle, noSearchParameter, layout, classLoaderScope);
 

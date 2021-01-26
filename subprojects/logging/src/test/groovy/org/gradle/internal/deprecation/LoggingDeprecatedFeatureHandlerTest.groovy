@@ -18,7 +18,6 @@ package org.gradle.internal.deprecation
 
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.logging.configuration.WarningMode
-import org.gradle.internal.featurelifecycle.DeprecatedUsageBuildOperationProgressBroadcaster
 import org.gradle.internal.featurelifecycle.DeprecatedUsageProgressDetails
 import org.gradle.internal.featurelifecycle.FeatureUsage
 import org.gradle.internal.featurelifecycle.FeatureUsageTest
@@ -27,6 +26,7 @@ import org.gradle.internal.featurelifecycle.UsageLocationReporter
 import org.gradle.internal.logging.CollectingTestOutputEventListener
 import org.gradle.internal.logging.ConfigureLogging
 import org.gradle.internal.operations.BuildOperationListener
+import org.gradle.internal.operations.BuildOperationProgressEventEmitter
 import org.gradle.internal.operations.CurrentBuildOperationRef
 import org.gradle.internal.operations.DefaultBuildOperationRef
 import org.gradle.internal.operations.OperationIdentifier
@@ -51,7 +51,9 @@ class LoggingDeprecatedFeatureHandlerTest extends Specification {
     final Clock clock = Mock(Clock)
     final BuildOperationListener buildOperationListener = Mock()
     final CurrentBuildOperationRef currentBuildOperationRef = new CurrentBuildOperationRef()
-    final DeprecatedUsageBuildOperationProgressBroadcaster progressBroadcaster = new DeprecatedUsageBuildOperationProgressBroadcaster(clock, buildOperationListener, currentBuildOperationRef)
+    final BuildOperationProgressEventEmitter progressBroadcaster = new BuildOperationProgressEventEmitter(
+        clock, currentBuildOperationRef, buildOperationListener
+    )
 
     def setup() {
         handler.init(locationReporter, WarningMode.All, progressBroadcaster)
@@ -386,16 +388,12 @@ class LoggingDeprecatedFeatureHandlerTest extends Specification {
         currentBuildOperationRef.set(new DefaultBuildOperationRef(new OperationIdentifier(1), null))
         handler.featureUsed(deprecatedFeatureUsage('feature1'))
 
-        then:
         1 * buildOperationListener.progress(_, _) >> { progressFired(it[1], 'feature1') }
 
-        when:
         handler.featureUsed(deprecatedFeatureUsage('feature2'))
 
-        then:
         1 * buildOperationListener.progress(_, _) >> { progressFired(it[1], 'feature2') }
 
-        when:
         handler.featureUsed(deprecatedFeatureUsage('feature2'))
 
         then:

@@ -20,6 +20,8 @@ import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.jvm.ModularitySpec;
+import org.gradle.jvm.toolchain.JavaToolchainSpec;
 
 /**
  * Common configuration for Java based projects. This is added by the {@link JavaBasePlugin}.
@@ -27,6 +29,7 @@ import org.gradle.api.artifacts.Configuration;
  * @since 4.10
  */
 public interface JavaPluginExtension {
+
     /**
      * Returns the source compatibility used for compiling Java sources.
      */
@@ -34,8 +37,12 @@ public interface JavaPluginExtension {
 
     /**
      * Sets the source compatibility used for compiling Java sources.
+     * <p>
+     * This property cannot be set if a {@link #getToolchain() toolchain} has been configured.
      *
      * @param value The value for the source compatibility
+     *
+     * @see #toolchain(Action)
      */
     void setSourceCompatibility(JavaVersion value);
 
@@ -46,8 +53,12 @@ public interface JavaPluginExtension {
 
     /**
      * Sets the target compatibility used for compiling Java sources.
+     * <p>
+     * This property cannot be set if a {@link #getToolchain() toolchain} has been configured.
      *
      * @param value The value for the target compatibility
+     *
+     * @see #toolchain(Action)
      */
     void setTargetCompatibility(JavaVersion value);
 
@@ -88,7 +99,6 @@ public interface JavaPluginExtension {
      *
      * @since 6.0
      */
-    @Incubating
     void withJavadocJar();
 
     /**
@@ -105,6 +115,44 @@ public interface JavaPluginExtension {
      *
      * @since 6.0
      */
-    @Incubating
     void withSourcesJar();
+
+    /**
+     * Configure the module path handling for tasks that have a 'classpath' as input. The module classpath handling defines
+     * to determine for each entry if it is passed to Java tools using '-classpath' or '--module-path'.
+     *
+     * @since 6.4
+     */
+    ModularitySpec getModularity();
+
+    /**
+     * Gets the project wide toolchain requirements that will be used for tasks requiring a tool from the toolchain (e.g. {@link org.gradle.api.tasks.compile.JavaCompile}).
+     * <p>
+     * Configuring a toolchain cannot be used together with {@code sourceCompatibility} or {@code targetCompatibility} on this extension.
+     * Both values will be sourced from the toolchain.
+     *
+     * @since 6.7
+     */
+    JavaToolchainSpec getToolchain();
+
+    /**
+     * Configures the project wide toolchain requirements for tasks that require a tool from the toolchain (e.g. {@link org.gradle.api.tasks.compile.JavaCompile}).
+     * <p>
+     * Configuring a toolchain cannot be used together with {@code sourceCompatibility} or {@code targetCompatibility} on this extension.
+     * Both values will be sourced from the toolchain.
+     *
+     * @since 6.7
+     */
+    JavaToolchainSpec toolchain(Action<? super JavaToolchainSpec> action);
+
+    /**
+     * Configure the dependency resolution consistency for this Java project.
+     *
+     * @param action the configuration action
+     *
+     * @since 6.8
+     */
+    @Incubating
+    void consistentResolution(Action<? super JavaResolutionConsistency> action);
+
 }

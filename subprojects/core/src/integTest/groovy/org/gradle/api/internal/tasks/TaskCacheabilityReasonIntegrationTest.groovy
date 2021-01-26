@@ -39,7 +39,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     def operations = new BuildOperationsFixture(executer, testDirectoryProvider)
 
     def setup() {
-        buildFile << """
+        buildFile """
             import org.gradle.api.internal.tasks.TaskOutputCachingDisabledReasonCategory
 
             class NotCacheable extends DefaultTask {
@@ -56,7 +56,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
 
             @CacheableTask
             class Cacheable extends NotCacheable {}
-            
+
             class NoOutputs extends DefaultTask {
                 @TaskAction
                 void generate() {}
@@ -108,13 +108,13 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a cacheable task with no outputs is NO_OUTPUTS_DECLARED"() {
-        buildFile << """
+        buildFile """
             @CacheableTask
             class CacheableNoOutputs extends DefaultTask {
                 @TaskAction
                 void generate() {}
             }
-            
+
             task noOutputs(type: CacheableNoOutputs) {}
         """
         when:
@@ -124,7 +124,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a non-cacheable task with no outputs is NOT_ENABLED_FOR_TASK"() {
-        buildFile << """
+        buildFile """
             task noOutputs(type: NoOutputs) {}
         """
         when:
@@ -154,8 +154,6 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     @Unroll
     def "cacheability for a task with @#annotation file tree outputs is NON_CACHEABLE_TREE_OUTPUT"() {
         buildFile << """
-            import javax.inject.Inject
-
             @CacheableTask
             abstract class PluralOutputs extends DefaultTask {
                 @$annotation
@@ -170,7 +168,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
                     layout.buildDirectory.file("some-dir/output.txt").get().asFile.text = "output"
                 }
             }
-            
+
             task pluralOutputs(type: PluralOutputs)
         """
         when:
@@ -183,7 +181,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a task with overlapping outputs is OVERLAPPING_OUTPUTS"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable)
             task cacheableWithOverlap(type: Cacheable) {
                 outputFile = cacheable.outputFile
@@ -193,11 +191,11 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
         withBuildCache().run "cacheable", "cacheableWithOverlap"
         then:
         assertCachingDisabledFor null, null, ":cacheable"
-        assertCachingDisabledFor OVERLAPPING_OUTPUTS, "Gradle does not know how file 'build${File.separator}tmp${File.separator}cacheable${File.separator}output.txt' was created (output property 'outputFile'). Task output caching requires exclusive access to output paths to guarantee correctness.", ":cacheableWithOverlap"
+        assertCachingDisabledFor OVERLAPPING_OUTPUTS, "Gradle does not know how file 'build${File.separator}tmp${File.separator}cacheable${File.separator}output.txt' was created (output property 'outputFile'). Task output caching requires exclusive access to output paths to guarantee correctness (i.e. multiple tasks are not allowed to produce output in the same location).", ":cacheableWithOverlap"
     }
 
     def "cacheability for a task with a cacheIf is CACHE_IF_SPEC_NOT_SATISFIED"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable) {
                 outputs.cacheIf("always false") { false }
             }
@@ -209,7 +207,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a task with a doNotCacheIf is DO_NOT_CACHE_IF_SPEC_SATISFIED"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable) {
                 outputs.doNotCacheIf("always true") { true }
             }
@@ -221,7 +219,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a task with onlyIf is UNKNOWN"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable) {
                 onlyIf { false }
             }
@@ -233,14 +231,14 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a task with no sources is UNKNOWN"() {
-        buildFile << """
+        buildFile """
             @CacheableTask
             class NoSources extends NotCacheable {
                 @InputFiles
                 @SkipWhenEmpty
                 FileCollection empty = project.layout.files()
             }
-            
+
             task cacheable(type: NoSources)
         """
         when:
@@ -250,7 +248,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a cacheable task that's up-to-date"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable)
         """
         when:
@@ -267,7 +265,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a non-cacheable task that's up-to-date"() {
-        buildFile << """
+        buildFile """
             task notcacheable(type: NotCacheable)
         """
         when:
@@ -284,7 +282,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a failing cacheable task is null"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: Cacheable) {
                 doLast {
                     throw new GradleException("boom")
@@ -299,7 +297,7 @@ class TaskCacheabilityReasonIntegrationTest extends AbstractIntegrationSpec impl
     }
 
     def "cacheability for a failing non-cacheable task is NOT_ENABLED_FOR_TASK"() {
-        buildFile << """
+        buildFile """
             task cacheable(type: NotCacheable) {
                 doLast {
                     throw new GradleException("boom")

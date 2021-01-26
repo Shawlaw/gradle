@@ -18,7 +18,6 @@ package org.gradle.api.internal.plugins
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 
 class ApplyPluginBuildOperationIntegrationTest extends AbstractIntegrationSpec {
 
@@ -41,16 +40,18 @@ class ApplyPluginBuildOperationIntegrationTest extends AbstractIntegrationSpec {
         def pluginIdByClass = plugins.details.collectEntries ( { [it.pluginClass, it.pluginId ] })
         def expectedPlugins = [
             "org.gradle.api.plugins.HelpTasksPlugin": "org.gradle.help-tasks",
-            "org.gradle.buildinit.plugins.BuildInitPlugin": "org.gradle.build-init",
-            "org.gradle.buildinit.plugins.WrapperPlugin": "org.gradle.wrapper",
+            // This tests runs in :core using a reduced distribution
+            // "org.gradle.buildinit.plugins.BuildInitPlugin": "org.gradle.build-init",
+            // "org.gradle.buildinit.plugins.WrapperPlugin": "org.gradle.wrapper",
             "org.gradle.api.plugins.JavaPlugin": "org.gradle.java",
             "org.gradle.api.plugins.JavaBasePlugin": null,
+            "org.gradle.api.plugins.JvmEcosystemPlugin": null,
             "org.gradle.api.plugins.BasePlugin": null,
             "org.gradle.language.base.plugins.LifecycleBasePlugin": null,
             "org.gradle.api.plugins.ReportingBasePlugin": null,
         ]
 
-        pluginIdByClass.size() == expectedPlugins.size()
+        pluginIdByClass.size() == expectedPlugins.size() || pluginIdByClass.size() == expectedPlugins.size() + 2 // +2 if we run against the full distribution
         pluginIdByClass.entrySet().containsAll(expectedPlugins.entrySet())
     }
 
@@ -108,7 +109,7 @@ class ApplyPluginBuildOperationIntegrationTest extends AbstractIntegrationSpec {
             include "a"
             include "b"
         """
-        buildFile << """
+        buildFile """
             class Plugin1 implements Plugin {
                 void apply(project) {
                     project.rootProject.project(":b").apply(plugin: Plugin2)
@@ -141,7 +142,6 @@ class ApplyPluginBuildOperationIntegrationTest extends AbstractIntegrationSpec {
         p2.details.pluginClass == "Plugin2"
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "associates target to correct build"() {
         when:
         settingsFile << """
@@ -166,7 +166,7 @@ class ApplyPluginBuildOperationIntegrationTest extends AbstractIntegrationSpec {
             }
             apply plugin: PluginB
         """
-        buildFile << """
+        buildFile """
             class PluginRoot implements Plugin {
                 void apply(project) {
 

@@ -23,9 +23,6 @@ class AbstractJavaModuleTestingIntegrationTest extends AbstractJavaModuleIntegra
     def setup() {
         buildFile << """
             ${mavenCentralRepository()}
-            tasks.withType(Test) {
-                modularClasspathHandling.inferModulePath.set(true)
-            }
         """
     }
 
@@ -38,7 +35,7 @@ class AbstractJavaModuleTestingIntegrationTest extends AbstractJavaModuleIntegra
             public class MainModuleTest {
 
                 @Test
-                public void testMain() {
+                public void testMain() throws Exception {
                     $statement;
                 }
             }

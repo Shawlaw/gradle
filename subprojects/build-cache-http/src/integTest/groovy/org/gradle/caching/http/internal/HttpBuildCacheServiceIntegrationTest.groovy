@@ -16,13 +16,11 @@
 
 package org.gradle.caching.http.internal
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.test.fixtures.keystore.TestKeyStore
 
 @IntegrationTestTimeout(120)
-class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec implements HttpBuildCacheFixture {
+class HttpBuildCacheServiceIntegrationTest extends HttpBuildCacheFixture {
 
     static final String ORIGINAL_HELLO_WORLD = """
             public class Hello {
@@ -52,7 +50,6 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         """
     }
 
-    @ToBeFixedForInstantExecution(skip = ToBeFixedForInstantExecution.Skip.FLAKY)
     def "no task is re-executed when inputs are unchanged"() {
         when:
         withBuildCache().run "jar"
@@ -68,11 +65,12 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         skipped ":compileJava"
     }
 
-    @ToBeFixedForInstantExecution
     def "outputs are correctly loaded from cache"() {
         buildFile << """
             apply plugin: "application"
-            mainClassName = "Hello"
+            application {
+                mainClass = "Hello"
+            }
         """
         withBuildCache().run "run"
         withBuildCache().run "clean"
@@ -80,7 +78,6 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         withBuildCache().run "run"
     }
 
-    @ToBeFixedForInstantExecution(skip = ToBeFixedForInstantExecution.Skip.FLAKY)
     def "tasks get cached when source code changes back to previous state"() {
         expect:
         withBuildCache().run "jar" assertTaskNotSkipped ":compileJava" assertTaskNotSkipped ":jar"
@@ -107,7 +104,6 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         executedAndNotSkipped ":clean"
     }
 
-    @ToBeFixedForInstantExecution
     def "cacheable task with cache disabled doesn't get cached"() {
         buildFile << """
             compileJava.outputs.cacheIf { false }
@@ -123,7 +119,6 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         executedAndNotSkipped ":compileJava"
     }
 
-    @ToBeFixedForInstantExecution
     def "non-cacheable task with cache enabled gets cached"() {
         file("input.txt") << "data"
         buildFile << """
@@ -132,7 +127,7 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
                 @OutputFile outputFile
 
                 @TaskAction copy() {
-                    project.mkdir outputFile.parentFile
+                    outputFile.parentFile.mkdirs()
                     outputFile.text = inputFile.text
                 }
             }
@@ -245,7 +240,6 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         skipped(":compileJava")
     }
 
-    @ToBeFixedForInstantExecution
     def "produces deprecation warning when using plain HTTP"() {
         httpBuildCacheServer.useHostname()
         settingsFile.text = useHttpBuildCache(httpBuildCacheServer.uri)
@@ -254,7 +248,7 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         executer.expectDeprecationWarning()
         withBuildCache().run "jar"
         succeeds "clean"
-        executer.expectDocumentedDeprecationWarning("Using insecure protocols with remote build cache has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+        executer.expectDocumentedDeprecationWarning("Using insecure protocols with remote build cache, without explicit opt-in, has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
             "Switch remote build cache to a secure protocol (like HTTPS) or allow insecure protocols. " +
             "See https://docs.gradle.org/current/dsl/org.gradle.caching.http.HttpBuildCache.html#org.gradle.caching.http.HttpBuildCache:allowInsecureProtocol for more details.")
 

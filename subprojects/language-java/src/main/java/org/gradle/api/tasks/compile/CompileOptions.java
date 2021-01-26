@@ -19,7 +19,6 @@ package org.gradle.api.tasks.compile;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import org.gradle.api.Incubating;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.model.ObjectFactory;
@@ -90,6 +89,7 @@ public class CompileOptions extends AbstractOptions {
 
     private final Property<String> javaModuleVersion;
     private final Property<String> javaModuleMainClass;
+    private final Property<Integer> release;
 
     private final DirectoryProperty generatedSourceOutputDirectory;
 
@@ -101,6 +101,7 @@ public class CompileOptions extends AbstractOptions {
         this.javaModuleMainClass = objectFactory.property(String.class);
         this.generatedSourceOutputDirectory = objectFactory.directoryProperty();
         this.headerOutputDirectory = objectFactory.directoryProperty();
+        this.release = objectFactory.property(Integer.class);
     }
 
     /**
@@ -478,11 +479,26 @@ public class CompileOptions extends AbstractOptions {
     }
 
     /**
+     * Configures the Java language version for this compile task ({@code --release} compiler flag).
+     * <p>
+     * If set, it will take precedences over the {@link AbstractCompile#getSourceCompatibility()} and {@link AbstractCompile#getTargetCompatibility()} settings.
+     * <p>
+     * This option is only taken into account by the {@link JavaCompile} task.
+     *
+     * @since 6.6
+     */
+    @Input
+    @Optional
+    public Property<Integer> getRelease() {
+        return release;
+    }
+
+
+    /**
      * Set the version of the Java module - defaults to {@link org.gradle.api.Project#getVersion()}.
      *
      * @since 6.4
      */
-    @Incubating
     @Optional
     @Input
     public Property<String> getJavaModuleVersion() {
@@ -494,7 +510,6 @@ public class CompileOptions extends AbstractOptions {
      *
      * @since 6.4
      */
-    @Incubating
     @Optional
     @Input
     public Property<String> getJavaModuleMainClass() {
@@ -506,7 +521,6 @@ public class CompileOptions extends AbstractOptions {
      *
      * @since 6.3
      */
-    @Incubating
     @Optional
     @OutputDirectory
     public DirectoryProperty getGeneratedSourceOutputDirectory() {

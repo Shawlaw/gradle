@@ -24,15 +24,19 @@ import org.gradle.api.InvalidUserCodeException;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.attributes.Attribute;
 import org.gradle.api.attributes.Usage;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectDependencyPublicationResolver;
 import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.project.ProjectInternal;
+import org.gradle.api.internal.project.ProjectRegistry;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.publish.VariantVersionMappingStrategy;
 import org.gradle.api.publish.internal.versionmapping.DefaultVariantVersionMappingStrategy;
 import org.gradle.api.publish.internal.versionmapping.VariantVersionMappingStrategyInternal;
 import org.gradle.api.publish.internal.versionmapping.VersionMappingStrategyInternal;
 import org.gradle.internal.component.model.AttributeMatcher;
+import org.gradle.internal.component.model.AttributeMatchingExplanationBuilder;
 
 import javax.inject.Inject;
 import java.util.Collection;
@@ -45,6 +49,8 @@ public class DefaultVersionMappingStrategy implements VersionMappingStrategyInte
     private final ConfigurationContainer configurations;
     private final AttributesSchemaInternal schema;
     private final ImmutableAttributesFactory attributesFactory;
+    private final ProjectDependencyPublicationResolver projectResolver;
+    private final ProjectRegistry<ProjectInternal> projectRegistry;
     private final List<Action<? super VariantVersionMappingStrategy>> mappingsForAllVariants = Lists.newArrayListWithExpectedSize(2);
     private final Map<ImmutableAttributes, String> defaultConfigurations = Maps.newHashMap();
     private final Multimap<ImmutableAttributes, Action<? super VariantVersionMappingStrategy>> attributeBasedMappings = ArrayListMultimap.create();
@@ -53,11 +59,16 @@ public class DefaultVersionMappingStrategy implements VersionMappingStrategyInte
     public DefaultVersionMappingStrategy(ObjectFactory objectFactory,
                                          ConfigurationContainer configurations,
                                          AttributesSchemaInternal schema,
-                                         ImmutableAttributesFactory attributesFactory) {
+                                         ImmutableAttributesFactory attributesFactory,
+                                         ProjectDependencyPublicationResolver projectResolver,
+                                         ProjectRegistry<ProjectInternal> projectRegistry) {
+
         this.objectFactory = objectFactory;
         this.configurations = configurations;
         this.schema = schema;
         this.attributesFactory = attributesFactory;
+        this.projectResolver = projectResolver;
+        this.projectRegistry = projectRegistry;
     }
 
     @Override
@@ -92,7 +103,7 @@ public class DefaultVersionMappingStrategy implements VersionMappingStrategyInte
         if (!attributeBasedMappings.isEmpty()) {
             AttributeMatcher matcher = schema.matcher();
             Set<ImmutableAttributes> candidates = attributeBasedMappings.keySet();
-            List<ImmutableAttributes> matches = matcher.matches(candidates, variantAttributes);
+            List<ImmutableAttributes> matches = matcher.matches(candidates, variantAttributes, AttributeMatchingExplanationBuilder.NO_OP);
             if (matches.size() == 1) {
                 Collection<Action<? super VariantVersionMappingStrategy>> actions = attributeBasedMappings.get(matches.get(0));
                 for (Action<? super VariantVersionMappingStrategy> action : actions) {
@@ -106,13 +117,13 @@ public class DefaultVersionMappingStrategy implements VersionMappingStrategyInte
     }
 
     private DefaultVariantVersionMappingStrategy createDefaultMappingStrategy(ImmutableAttributes variantAttributes) {
-        DefaultVariantVersionMappingStrategy strategy = new DefaultVariantVersionMappingStrategy(configurations);
+        DefaultVariantVersionMappingStrategy strategy = new DefaultVariantVersionMappingStrategy(configurations, projectResolver, projectRegistry);
         if (!defaultConfigurations.isEmpty()) {
             // First need to populate the default variant version mapping strategy with the default values
             // provided by plugins
             AttributeMatcher matcher = schema.matcher();
             Set<ImmutableAttributes> candidates = defaultConfigurations.keySet();
-            List<ImmutableAttributes> matches = matcher.matches(candidates, variantAttributes);
+            List<ImmutableAttributes> matches = matcher.matches(candidates, variantAttributes, AttributeMatchingExplanationBuilder.NO_OP);
             for (ImmutableAttributes match : matches) {
                 strategy.setTargetConfiguration(configurations.getByName(defaultConfigurations.get(match)));
             }

@@ -16,7 +16,6 @@
 
 package org.gradle.workers.internal
 
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.integtests.fixtures.ProcessFixture
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.test.fixtures.ConcurrentTestUtil
@@ -34,11 +33,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             import org.gradle.workers.internal.WorkerDaemonFactory
 
             task runInWorker1(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task runInWorker2(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 doFirst {
                     def all = services.get(WorkerDaemonFactory.class).clientsManager.allClients.size()
                     def idle = services.get(WorkerDaemonFactory.class).clientsManager.idleClients.size()
@@ -61,11 +60,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             task runInWorker1(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task runInWorker2(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 
@@ -86,7 +85,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 
@@ -109,11 +108,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             task runInWorker1(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task runInWorker2(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 
@@ -139,11 +138,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             task runInWorker1(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task runInWorker2(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 
@@ -171,19 +170,18 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         assertDifferentDaemonsWereUsed("runInWorker1", "runInWorker2")
     }
 
-    @ToBeFixedForInstantExecution
     def "worker daemons are not reused when they fail unexpectedly"() {
         workerExecutorThatCanFailUnexpectedly.writeToBuildFile()
         buildFile << """
             task runInWorker1(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             task runInWorker2(type: WorkerTask) {
                 // This will cause the worker process to fail with exit code 127
                 list = runInWorker1.list + ["poisonPill"]
 
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 
@@ -209,7 +207,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             apply plugin: "java"
 
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
 
             tasks.withType(JavaCompile) {
@@ -239,7 +237,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
             }
         """
 

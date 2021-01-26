@@ -17,15 +17,14 @@
 package org.gradle.api
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
-import org.gradle.integtests.fixtures.FluidDependenciesResolveRunner
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.executer.ProjectLifecycleFixture
+import org.gradle.integtests.fixtures.extensions.FluidDependenciesResolveTest
 import org.junit.Rule
-import org.junit.runner.RunWith
 import spock.lang.IgnoreIf
 
-@RunWith(FluidDependenciesResolveRunner)
+@FluidDependenciesResolveTest
 class ConfigurationOnDemandIntegrationTest extends AbstractIntegrationSpec {
 
     @Rule ProjectLifecycleFixture fixture = new ProjectLifecycleFixture(executer, temporaryFolder)
@@ -72,18 +71,14 @@ class ConfigurationOnDemandIntegrationTest extends AbstractIntegrationSpec {
     }
 
     def "evaluates only project referenced in the task list"() {
-        // The util project's classloaders will be created eagerly because util:impl
-        // will be evaluated before it
-        executer.withEagerClassLoaderCreationCheckDisabled()
-
         settingsFile << "include 'api', 'impl', 'util', 'util:impl'"
         buildFile << "allprojects { task foo }"
 
         when:
-        run(":foo", ":util:impl:foo")
+        run(":util:impl:foo")
 
         then:
-        fixture.assertProjectsConfigured(":", ":util:impl")
+        fixture.assertProjectsConfigured(":", ":util", ":util:impl")
     }
 
     def "does not show configuration on demand incubating message in a regular mode"() {
@@ -94,7 +89,7 @@ class ConfigurationOnDemandIntegrationTest extends AbstractIntegrationSpec {
         !output.contains("Configuration on demand is incubating")
     }
 
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache(because = "test expects configuration phase")
     def "follows java project dependencies"() {
         settingsFile << "include 'api', 'impl', 'util'"
         buildFile << "allprojects { apply plugin: 'java-library' } "
@@ -208,23 +203,21 @@ project(':api') {
         fixture.assertProjectsConfigured(":", ":impl", ":impl:one", ":impl:two", ":impl:two:abc")
     }
 
-    @ToBeFixedForInstantExecution
     def "may run implicit tasks from root"() {
         settingsFile << "include 'api', 'impl'"
 
         when:
-        run(":tasks")
+        run(":help")
 
         then:
         fixture.assertProjectsConfigured(":")
     }
 
-    @ToBeFixedForInstantExecution
     def "may run implicit tasks for subproject"() {
         settingsFile << "include 'api', 'impl'"
 
         when:
-        run(":api:tasks")
+        run(":api:help")
 
         then:
         fixture.assertProjectsConfigured(":", ":api")
@@ -246,7 +239,6 @@ project(':api') {
         result.assertTasksExecuted(':api:foo')
     }
 
-    @ToBeFixedForInstantExecution
     def "respects evaluationDependsOn"() {
         settingsFile << "include 'api', 'impl', 'other'"
         file("api/build.gradle") << """
@@ -254,13 +246,13 @@ project(':api') {
         """
 
         when:
-        run("api:tasks")
+        run("api:help")
 
         then:
         fixture.assertProjectsConfigured(":", ":impl", ":api")
     }
 
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache(because = "test expects configuration phase")
     def "respects buildProjectDependencies setting"() {
         settingsFile << "include 'api', 'impl', 'other'"
         file("impl/build.gradle") << """
@@ -392,6 +384,7 @@ task two(type: SomeTask)
 
 class SomeTask extends DefaultTask {
     @org.gradle.api.tasks.options.Option(description="some value")
+    @Input
     String value
 }
 """
@@ -518,5 +511,24 @@ allprojects {
         then:
         result.assertTasksExecuted(":a:one")
         fixture.assertProjectsConfigured(":", ":b", ":b:child", ":a")
+    }
+
+    def "extra properties defined in parent project are accessible to child"() {
+        settingsFile << "include 'a', 'a:child'"
+        file('a/build.gradle') << """
+ext.foo = "Moo!!!"
+"""
+        file('a/child/build.gradle') << """
+task printExt {
+    doLast {
+        println "The Foo says " + foo
+    }
+}
+"""
+        when:
+        run(":a:child:printExt")
+
+        then:
+        outputContains("The Foo says Moo!!!")
     }
 }

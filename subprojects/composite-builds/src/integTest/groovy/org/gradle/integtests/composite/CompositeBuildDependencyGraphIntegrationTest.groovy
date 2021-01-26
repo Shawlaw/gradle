@@ -16,7 +16,8 @@
 
 package org.gradle.integtests.composite
 
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
+import org.gradle.api.JavaVersion
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.build.BuildTestFile
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
 import spock.lang.Unroll
@@ -66,7 +67,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
             .assertHasCause("exception thrown on configure")
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "does no substitution when no project matches external dependencies"() {
         given:
         mavenRepo.module("org.different", "buildB", "1.0").publish()
@@ -89,7 +89,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependency with root project dependency"() {
         given:
         buildA.buildFile << """
@@ -113,7 +112,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         executed ":buildB:jar"
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "can resolve dependency graph without building artifacts"() {
         given:
         resolve.withoutBuildingArtifacts()
@@ -139,7 +137,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         notExecuted ":buildB:jar"
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependencies with project dependencies using --include-build"() {
         given:
         singleProjectBuild("buildC") {
@@ -172,7 +169,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependencies with subproject dependencies"() {
         given:
         buildA.buildFile << """
@@ -198,7 +194,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependency with project dependency from same participant build"() {
         given:
         buildA.buildFile << """
@@ -228,7 +223,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependency with subproject dependency that has transitive dependencies"() {
         given:
         def transitive1 = mavenRepo.module("org.test", "transitive1").publish()
@@ -259,7 +253,6 @@ class CompositeBuildDependencyGraphIntegrationTest extends AbstractCompositeBuil
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes external dependency with subproject dependency that has transitive project dependencies"() {
         given:
         buildA.buildFile << """
@@ -297,7 +290,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "honours excludes defined in substituted subproject dependency that has transitive dependencies"() {
         given:
         def transitive1 = mavenRepo.module("org.test", "transitive1").publish()
@@ -328,7 +320,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes transitive dependency of substituted project dependency"() {
         given:
         buildA.buildFile << """
@@ -364,7 +355,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes transitive dependency of non-substituted external dependency"() {
         given:
         mavenRepo.module("org.external", "external-dep", '1.0').dependsOn("org.test", "buildB", "1.0").publish()
@@ -388,7 +378,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes forced direct dependency"() {
         given:
         buildA.buildFile << """
@@ -410,7 +399,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes transitive dependency with forced version"() {
         given:
         mavenRepo.module("org.external", "external-dep", '1.0').dependsOn("org.test", "buildB", "1.0").publish()
@@ -435,7 +423,6 @@ include ':b1:b11'
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes transitive dependency based on result of resolution rules"() {
         given:
         mavenRepo.module("org.external", "external-dep", '1.0')
@@ -476,7 +463,6 @@ include ':b1:b11'
     }
 
     @Unroll
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "evaluates subprojects when substituting external dependencies with #name"() {
         given:
         buildA.buildFile << """
@@ -510,7 +496,6 @@ afterEvaluate {
         "parallel"            | ["--parallel"]
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "substitutes dependency in composite containing participants with same root directory name"() {
         given:
         buildA.buildFile << """
@@ -548,7 +533,6 @@ afterEvaluate {
         }
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "can substitute dependencies in composite with duplicate publication if not involved in resolution"() {
         given:
         def buildC = multiProjectBuild("buildC", ['a2', 'b2', 'c1']) {
@@ -646,7 +630,6 @@ afterEvaluate {
         failure.assertHasCause("Module version 'org.test:b1:2.0' is not unique in composite: can be provided by [project :buildB:b1, project :buildC:b1].")
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "resolve transitive project dependency that is ambiguous in the composite"() {
         given:
         transitiveDependencyIsAmbiguous("project(':b1')")
@@ -688,7 +671,6 @@ afterEvaluate {
 """
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "handles unused participant with no defined configurations"() {
         given:
         def buildC = singleProjectBuild("buildC")
@@ -727,11 +709,11 @@ afterEvaluate {
         checkDependenciesFails()
 
         then:
-        failure.assertHasCause("Unable to find a matching configuration of project :buildC:\n" +
+        failure.assertHasCause("No matching configuration of project :buildC was found. The consumer was configured to find a runtime of a library compatible with Java ${JavaVersion.current().majorVersion}, packaged as a jar, and its dependencies declared externally but:\n" +
             "  - None of the consumable configurations have attributes.")
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
+    @ToBeFixedForConfigurationCache(because = "Resolve test fixture doesn't support configuration cache")
     def "includes build identifier in error message on failure to resolve dependencies of included build"() {
         def m = mavenRepo.module("org.test", "test", "1.2")
 
@@ -749,22 +731,22 @@ afterEvaluate {
                 maven { url '$mavenRepo.uri' }
             }
 
-            configurations { 
-                buildInputs 
+            configurations {
+                buildInputs
                 create('default')
             }
-            
+
             dependencies {
                 buildInputs "org.test:test:1.2"
             }
-            
+
             task buildOutputs {
                 inputs.files configurations.buildInputs
                 doLast {
                     configurations.buildInputs.each { }
                 }
             }
-            
+
             artifacts {
                 "default" file: file("out.jar"), builtBy: buildOutputs
             }
@@ -793,6 +775,61 @@ Required by:
         failure.assertHasDescription("Execution failed for task ':buildC:buildOutputs'.")
         failure.assertHasCause("Could not resolve all files for configuration ':buildC:buildInputs'.")
         failure.assertHasCause("Could not find test-1.2.jar (org.test:test:1.2).")
+    }
+
+    @Unroll
+    def "substitutes external dependency for a subproject of the root build - #rootIsIncluded"() {
+        given:
+        def empty = file('empty').tap {
+            it.mkdir()
+        }
+        mavenRepo.module("org.test", "subproject1", "2.0").publish()
+        buildA.buildFile << """
+            subprojects {
+                apply plugin: 'java-library'
+                group = 'org.test'
+                version = '1.0'
+            }
+            dependencies {
+                implementation "org.test:subproject1:2.0"
+            }
+        """
+        includedBuilds = [empty]
+        buildA.settingsFile << """
+            include('subproject1')
+            $includeRootStatement
+        """
+
+        when:
+        checkDependencies()
+
+        then:
+        def expectSubstitution = rootIsIncluded.contains("yes")
+        checkGraph {
+            if (expectSubstitution) {
+                edge("org.test:subproject1:2.0", "project :subproject1", "org.test:subproject1:1.0") {
+                    configuration = "runtimeElements"
+                    compositeSubstitute()
+                }
+            } else {
+                module("org.test:subproject1:2.0")
+            }
+        }
+
+        and:
+        if (expectSubstitution) {
+            executed(":subproject1:jar")
+        } else {
+            notExecuted(":subproject1:jar")
+        }
+
+        where:
+        rootIsIncluded          | includeRootStatement
+        'no'                    | ""
+        'yes'                   | "includeBuild('.')"
+        // If substitutions for the root would be controllable (e.g. by the first include statement encountered) this would enable you to not have the ':subproject1' substitution
+        // This documents the current behavior. It is unclear if this is a useful functionality to have.
+        'yes with substitution' | "includeBuild('.') { dependencySubstitution { substitute module('org.test:subproject2') with project(':subproject2') } }"
     }
 
     private void withArgs(List<String> args) {

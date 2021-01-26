@@ -16,8 +16,6 @@
 
 package org.gradle.api.provider;
 
-import org.gradle.api.Incubating;
-
 /**
  * Represents an object that holds a value that is configurable, meaning that the value or some source for the value, such as a {@link Provider},
  * can be specified directly on the object.
@@ -32,7 +30,6 @@ import org.gradle.api.Incubating;
  *
  * @since 5.6
  */
-@Incubating
 public interface HasConfigurableValue {
     /**
      * Calculates the final value of this object and disallows further changes to this object.
@@ -73,4 +70,14 @@ public interface HasConfigurableValue {
      * <p>If the value of this object is already final, this method does nothing.</p>
      */
     void disallowChanges();
+
+    /**
+     * Disallows reading the value of this object when its value may not yet be available or may still change.
+     *
+     * <p>The value of this property cannot be read during project configuration, to allow all plugins an opportunity to configure the value. After a project's configuration has completed,
+     * the value may be read. The property is also finalized on read.
+     *
+     * @since 6.4
+     */
+    void disallowUnsafeRead();
 }

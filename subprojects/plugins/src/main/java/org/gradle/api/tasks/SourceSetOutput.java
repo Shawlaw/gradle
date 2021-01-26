@@ -16,7 +16,6 @@
 
 package org.gradle.api.tasks;
 
-import org.gradle.api.Incubating;
 import org.gradle.api.file.FileCollection;
 
 import javax.annotation.Nullable;
@@ -29,7 +28,9 @@ import java.util.Map;
  * Provides output information of the source set. Allows configuring the default output dirs and specify additional output dirs.
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
+ * plugins {
+ *     id 'java'
+ * }
  *
  * sourceSets {
  *   main {
@@ -52,7 +53,9 @@ import java.util.Map;
  * An example how to work with generated resources:
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
+ * plugins {
+ *     id 'java'
+ * }
  *
  * def generatedResources = "$buildDir/generated-resources/main"
  *
@@ -156,6 +159,5 @@ public interface SourceSetOutput extends FileCollection {
      * @return The generated sources directories. Never returns null.
      * @since 5.2
      */
-    @Incubating
     FileCollection getGeneratedSourcesDirs();
 }

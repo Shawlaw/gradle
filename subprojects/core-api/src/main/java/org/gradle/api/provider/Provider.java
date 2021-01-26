@@ -16,13 +16,13 @@
 
 package org.gradle.api.provider;
 
-import org.gradle.api.Incubating;
 import org.gradle.api.NonExtensible;
 import org.gradle.api.Transformer;
 import org.gradle.internal.HasInternalProtocol;
 
 import javax.annotation.Nullable;
 import java.util.concurrent.Callable;
+import java.util.function.BiFunction;
 
 /**
  * A container object that provides a value of a specific type. The value can be retrieved using one of the query methods such as {@link #get()} or {@link #getOrNull()}.
@@ -117,7 +117,6 @@ public interface Provider<T> {
      * @param transformer The transformer to apply to values. May return {@code null}, in which case the provider will have no value.
      * @since 5.0
      */
-    @Incubating
     <S> Provider<S> flatMap(Transformer<? extends Provider<? extends S>, ? super T> transformer);
 
     /**
@@ -133,7 +132,6 @@ public interface Provider<T> {
      * @param value The default value to use when this provider has no value.
      * @since 5.6
      */
-    @Incubating
     Provider<T> orElse(T value);
 
     /**
@@ -142,6 +140,29 @@ public interface Provider<T> {
      * @param provider The provider whose value should be used when this provider has no value.
      * @since 5.6
      */
-    @Incubating
     Provider<T> orElse(Provider<? extends T> provider);
+
+    /**
+     * Returns a view of this {@link Provider} which can be safely read at configuration time.
+     *
+     * @since 6.5
+     */
+    Provider<T> forUseAtConfigurationTime();
+
+    /**
+     * Returns a provider which value will be computed by combining this provider value with another
+     * provider value using the supplied combiner function.
+     *
+     * If the supplied providers represents a task or the output of a task, the resulting provider
+     * will carry the dependency information.
+     *
+     * @param right the second provider to combine with
+     * @param combiner the combiner of values
+     * @param <B> the type of the second provider
+     * @param <R> the type of the result of the combiner
+     * @return a combined provider
+     *
+     * @since 6.6
+     */
+    <B, R> Provider<R> zip(Provider<B> right, BiFunction<T, B, R> combiner);
 }

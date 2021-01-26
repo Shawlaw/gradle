@@ -18,7 +18,6 @@ package org.gradle.initialization
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
 import org.gradle.internal.operations.trace.BuildOperationRecord
 
 class EvaluateSettingsBuildOperationIntegrationTest extends AbstractIntegrationSpec {
@@ -33,24 +32,6 @@ class EvaluateSettingsBuildOperationIntegrationTest extends AbstractIntegrationS
 
         then:
         verifySettings(operation(), settingsFile)
-        operation().details.buildPath == ":"
-    }
-
-    def "settings with master folder are exposed"() {
-
-        def customSettingsFile = file("master/settings.gradle")
-        customSettingsFile << """
-        includeFlat "a"
-        """
-
-        def projectDirectory = testDirectory.createDir("a")
-
-        when:
-        projectDir(projectDirectory)
-        succeeds('help')
-
-        then:
-        verifySettings(operation(), customSettingsFile)
         operation().details.buildPath == ":"
     }
 
@@ -72,7 +53,6 @@ class EvaluateSettingsBuildOperationIntegrationTest extends AbstractIntegrationS
         operation().details.buildPath == ":"
     }
 
-    @ToBeFixedForInstantExecution(because = "composite builds")
     def "composite participants expose their settings details"() {
         settingsFile << """
             include "a"

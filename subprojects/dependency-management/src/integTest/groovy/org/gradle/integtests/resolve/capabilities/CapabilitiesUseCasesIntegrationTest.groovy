@@ -18,8 +18,8 @@ package org.gradle.integtests.resolve.capabilities
 
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
-import spock.lang.Ignore
 import spock.lang.Unroll
 
 class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolveTest {
@@ -37,6 +37,7 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
      * enforce the use of only one of them at the same time.
      */
     @Unroll
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*conflict fix not applied.*"])
     def "can choose between cglib and cglib-nodep by declaring capabilities (#description)"() {
         given:
         repository {
@@ -130,6 +131,7 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
      * This is from the consumer point of view, fixing the fact the library doesn't declare capabilities.
      */
     @Unroll
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*conflict fix not applied.*"])
     def "can select groovy-all over individual groovy-whatever (#description)"() {
         given:
         repository {
@@ -252,6 +254,7 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
      * This is from the consumer point of view, fixing the fact the library doesn't declare capabilities.
      */
     @Unroll
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*conflict fix not applied.*"])
     def "can select individual groovy-whatever over individual groovy-all (#description)"() {
         given:
         repository {
@@ -370,6 +373,7 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
      * This test also makes sure that the order in which dependencies are seen in the graph do not matter.
      */
     @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*failOnVersionConflict=true.*"])
     @Unroll
     def "published module can declare relocation (first in graph = #first, second in graph = #second, failOnVersionConflict=#failOnVersionConflict)"() {
         given:
@@ -438,6 +442,7 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
      */
 
     @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*conflict fix not applied.*"])
     @Unroll
     def "can express preference for capabilities declared in published modules (#description)"() {
         given:
@@ -509,11 +514,5 @@ class CapabilitiesUseCasesIntegrationTest extends AbstractModuleDependencyResolv
         fixConflict | description
         false       | 'conflict fix not applied'
         true        | 'conflict fix applied'
-    }
-
-    @Ignore
-    def "trust no one"() {
-        expect:
-        true // Spock doesn't like when there are only Unroll tests in a test class
     }
 }

@@ -16,12 +16,11 @@
 
 package org.gradle.workers.internal
 
-import org.gradle.integtests.fixtures.ToBeFixedForInstantExecution
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.internal.jvm.Jvm
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
-import org.gradle.workers.IsolationMode
 import org.gradle.workers.fixtures.WorkerExecutorFixture
 import spock.lang.Unroll
 
@@ -117,7 +116,7 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
 
         buildFile << """
             task runInDaemon(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 additionalForkOptions = {
                     it.jvmArgs "-foo"
                 }
@@ -138,7 +137,7 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
     }
 
     @Unroll
-    @ToBeFixedForInstantExecution
+    @ToBeFixedForConfigurationCache(because = "non-serializable fails configuration cache store earlier")
     def "produces a sensible error when a parameter can't be serialized to the worker in #isolationMode"() {
         def workAction = fixture.workActionThatCreatesFiles.writeToBuildSrc()
         def alternateExecution = fixture.alternateWorkAction.writeToBuildSrc()
@@ -182,12 +181,12 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
 
         buildFile << """
             task runAgainInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.$isolationMode
+                isolationMode = $isolationMode
                 workActionClass = ${alternateExecution.name}.class
             }
 
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.$isolationMode
+                isolationMode = $isolationMode
                 additionalClasspath = files('${parameterJar.name}')
                 foo = new FooWithUnserializableBar()
                 finalizedBy runAgainInWorker
@@ -206,7 +205,7 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
         assertWorkerExecuted("runAgainInWorker")
 
         where:
-        isolationMode << [IsolationMode.CLASSLOADER, IsolationMode.PROCESS]
+        isolationMode << ["'classLoaderIsolation'", "'processIsolation'"]
     }
 
     @Unroll
@@ -273,7 +272,7 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
 
         buildFile << """
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 additionalForkOptions = {
                     it.systemProperty("org.gradle.native.dir", "/dev/null")
                 }
@@ -300,7 +299,7 @@ class WorkerExecutorErrorHandlingIntegrationTest extends AbstractWorkerExecutorI
             }
 
             task runInWorker(type: WorkerTask) {
-                isolationMode = IsolationMode.PROCESS
+                isolationMode = 'processIsolation'
                 workActionClass = BadWorkAction.class
             }
         """.stripIndent()

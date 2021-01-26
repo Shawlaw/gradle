@@ -24,50 +24,50 @@ class FunctionalTest(
     this.name = name
     this.description = description
     id = AbsoluteId(uuid)
-    val testTaskName = "${testCoverage.testType.name}Test"
-    val testTasks = if (subprojects.isEmpty())
-        testTaskName
-    else
-        subprojects.joinToString(" ") { "$it:$testTaskName" }
-    val quickTest = testCoverage.testType == TestType.quick
+    val testTasks = getTestTaskName(testCoverage, stage, subprojects)
     val buildScanTags = listOf("FunctionalTest")
     val buildScanValues = mapOf(
-        "coverageOs" to testCoverage.os.name,
+        "coverageOs" to testCoverage.os.name.toLowerCase(),
         "coverageJvmVendor" to testCoverage.vendor.name,
         "coverageJvmVersion" to testCoverage.testJvmVersion.name
     )
 
-    if (name.contains("(instantExecution)")) {
+    if (name.contains("(configuration-cache)")) {
         requirements {
             doesNotContain("teamcity.agent.name", "ec2")
+            // US region agents have name "EC2-XXX"
+            doesNotContain("teamcity.agent.name", "EC2")
         }
     }
 
-    applyTestDefaults(model, this, testTasks, notQuick = !quickTest, os = testCoverage.os,
+    val enableTestDistribution = testCoverage.testDistribution
+
+    applyTestDefaults(model, this, testTasks, notQuick = !testCoverage.isQuick, os = testCoverage.os,
         extraParameters = (
-            listOf(""""-PtestJavaHome=%${testCoverage.os}.${testCoverage.testJvmVersion}.${testCoverage.vendor}.64bit%"""") +
+            listOf(""""-PtestJavaHome=${testCoverage.os.javaHome(testCoverage.testJvmVersion, testCoverage.vendor)}"""") +
                 buildScanTags.map { buildScanTag(it) } +
                 buildScanValues.map { buildScanCustomValue(it.key, it.value) } +
-                extraParameters
+                if (enableExperimentalTestDistribution(testCoverage, subprojects)) "-DenableTestDistribution=%enableTestDistribution%" else "" +
+                    extraParameters
             ).filter { it.isNotBlank() }.joinToString(separator = " "),
         timeout = testCoverage.testType.timeout,
         extraSteps = extraBuildSteps,
         preSteps = preBuildSteps)
 
     params {
-        param("env.JAVA_HOME", "%${testCoverage.os}.${testCoverage.buildJvmVersion}.openjdk.64bit%")
-        when (testCoverage.os) {
-            Os.linux -> {
-                param("env.ANDROID_HOME", "/opt/android/sdk")
-            }
-            Os.macos -> {
-                param("env.ANDROID_HOME", "/opt/android/sdk")
-                // Use fewer parallel forks on macOs, since the agents are not very powerful.
-                param("maxParallelForks", "2")
-            }
-            Os.windows -> {
-                param("env.ANDROID_HOME", """C:\Program Files\android\sdk""")
-            }
+        if (enableTestDistribution) {
+            param("env.GRADLE_ENTERPRISE_ACCESS_KEY", "%e.grdev.net.access.key%")
+        }
+
+        param("env.JAVA_HOME", "%${testCoverage.os.name.toLowerCase()}.${testCoverage.buildJvmVersion}.openjdk.64bit%")
+        param("env.ANDROID_HOME", testCoverage.os.androidHome)
+        if (testCoverage.os == Os.MACOS) {
+            // Use fewer parallel forks on macOs, since the agents are not very powerful.
+            param("maxParallelForks", "2")
+        }
+
+        if (testCoverage.testDistribution) {
+            param("maxParallelForks", "16")
         }
     }
 
@@ -79,3 +79,20 @@ class FunctionalTest(
         }
     }
 })
+
+fun enableExperimentalTestDistribution(testCoverage: TestCoverage, subprojects: List<String>) = testCoverage.os == Os.LINUX && (subprojects == listOf("core") || subprojects == listOf("dependency-management"))
+
+fun getTestTaskName(testCoverage: TestCoverage, stage: Stage, subprojects: List<String>): String {
+    val testTaskName = "${testCoverage.testType.name}Test"
+    return when {
+        testCoverage.testDistribution -> {
+            return testTaskName
+        }
+        subprojects.isEmpty() -> {
+            testTaskName
+        }
+        else -> {
+            subprojects.joinToString(" ") { "$it:$testTaskName" }
+        }
+    }
+}

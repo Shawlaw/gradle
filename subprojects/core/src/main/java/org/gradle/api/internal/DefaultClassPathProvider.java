@@ -43,20 +43,25 @@ public class DefaultClassPathProvider implements ClassPathProvider {
         }
         if (name.equals("SCALA-COMPILER")) {
             ClassPath classpath = ClassPath.EMPTY;
-            classpath = classpath.plus(moduleRegistry.getModule("gradle-language-scala").getImplementationClasspath());
             classpath = classpath.plus(moduleRegistry.getModule("gradle-scala").getImplementationClasspath());
-            classpath = addJavaCompilerModules(classpath);
-            return classpath;
-        }
-        if (name.equals("PLAY-COMPILER")) {
-            ClassPath classpath = ClassPath.EMPTY;
-            classpath = classpath.plus(moduleRegistry.getModule("gradle-platform-play").getImplementationClasspath());
-            classpath = classpath.plus(moduleRegistry.getModule("gradle-javascript").getImplementationClasspath());
             classpath = addJavaCompilerModules(classpath);
             return classpath;
         }
         if (name.equals("JAVA-COMPILER")) {
             return addJavaCompilerModules(ClassPath.EMPTY);
+        }
+        if (name.equals("DEPENDENCIES-EXTENSION-COMPILER")) {
+            ClassPath classpath = ClassPath.EMPTY;
+            classpath = classpath.plus(moduleRegistry.getModule("gradle-base-annotations").getImplementationClasspath());
+            classpath = classpath.plus(moduleRegistry.getModule("gradle-base-services").getImplementationClasspath());
+            classpath = classpath.plus(moduleRegistry.getModule("gradle-core-api").getImplementationClasspath());
+            classpath = classpath.plus(moduleRegistry.getModule("gradle-core").getImplementationClasspath());
+            classpath = classpath.plus(moduleRegistry.getModule("gradle-dependency-management").getImplementationClasspath());
+            classpath = classpath.plus(moduleRegistry.getExternalModule("javax.inject").getClasspath());
+            return classpath;
+        }
+        if (name.equals("JAVA-COMPILER-PLUGIN")) {
+            return addJavaCompilerModules(moduleRegistry.getModule("gradle-java-compiler-plugin").getImplementationClasspath());
         }
         if (name.equals("ANT")) {
             ClassPath classpath = ClassPath.EMPTY;

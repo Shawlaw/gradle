@@ -27,6 +27,7 @@ import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.file.FileTreeElement;
 import org.gradle.api.internal.ConventionTask;
+import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.api.internal.file.FileLookup;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
@@ -49,6 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
+
+import static org.gradle.api.internal.lambdas.SerializableLambdas.spec;
 
 /**
  * {@code AbstractCopyTask} is the base class for all copy tasks.
@@ -86,7 +89,10 @@ public abstract class AbstractCopyTask extends ConventionTask implements CopySpe
                 .optional(true);
             getInputs().property(specPropertyName + ".filteringCharset", (Callable<String>) spec::getFilteringCharset);
         });
-        this.getOutputs().doNotCacheIf("Has custom actions", task -> rootSpec.hasCustomActions());
+        this.getOutputs().doNotCacheIf(
+            "Has custom actions",
+            spec(task -> rootSpec.hasCustomActions())
+        );
         this.mainSpec = rootSpec.addChild();
     }
 
@@ -121,6 +127,11 @@ public abstract class AbstractCopyTask extends ConventionTask implements CopySpe
         throw new UnsupportedOperationException();
     }
 
+    @Inject
+    protected DocumentationRegistry getDocumentationRegistry() {
+        throw new UnsupportedOperationException();
+    }
+
     @TaskAction
     protected void copy() {
         CopyActionExecuter copyActionExecuter = createCopyActionExecuter();
@@ -133,11 +144,12 @@ public abstract class AbstractCopyTask extends ConventionTask implements CopySpe
         Instantiator instantiator = getInstantiator();
         FileSystem fileSystem = getFileSystem();
 
-        return new CopyActionExecuter(instantiator, fileSystem, false);
+        return new CopyActionExecuter(instantiator, fileSystem, false, getDocumentationRegistry());
     }
 
     /**
      * Returns the source files for this task.
+     *
      * @return The source files. Never returns null.
      */
     @Internal

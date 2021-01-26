@@ -53,7 +53,6 @@ public interface FeatureSpec {
      *
      * @since 6.0
      */
-    @Incubating
     void withJavadocJar();
 
     /**
@@ -62,6 +61,14 @@ public interface FeatureSpec {
      *
      * @since 6.0
      */
-    @Incubating
     void withSourcesJar();
+
+    /**
+     * By default, features are published on external repositories.
+     * Calling this method allows disabling publishing.
+     *
+     * @since 6.7
+     */
+    @Incubating
+    void disablePublication();
 }

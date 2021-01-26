@@ -24,7 +24,7 @@ import org.gradle.api.file.ConfigurableFileTree;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.DeleteSpec;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.file.FileTree;
+import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.api.internal.file.archive.TarFileTree;
 import org.gradle.api.internal.file.archive.ZipFileTree;
 import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
@@ -83,7 +83,8 @@ public class DefaultFileOperations implements FileOperations {
         FileCollectionFactory fileCollectionFactory,
         FileSystem fileSystem,
         Factory<PatternSet> patternSetFactory,
-        Deleter deleter
+        Deleter deleter,
+        DocumentationRegistry documentationRegistry
     ) {
         this.fileCollectionFactory = fileCollectionFactory;
         this.fileResolver = fileResolver;
@@ -101,7 +102,8 @@ public class DefaultFileOperations implements FileOperations {
             fileResolver,
             patternSetFactory,
             fileSystem,
-            instantiator
+            instantiator,
+            documentationRegistry
         );
         this.fileSystem = fileSystem;
         this.deleter = deleter;
@@ -152,19 +154,19 @@ public class DefaultFileOperations implements FileOperations {
     }
 
     @Override
-    public FileTree zipTree(Object zipPath) {
+    public FileTreeInternal zipTree(Object zipPath) {
         return new FileTreeAdapter(new ZipFileTree(file(zipPath), getExpandDir(), fileSystem, directoryFileTreeFactory, fileHasher), patternSetFactory);
     }
 
     @Override
-    public FileTree tarTree(Object tarPath) {
+    public FileTreeInternal tarTree(Object tarPath) {
         File tarFile = null;
         ReadableResourceInternal resource;
         if (tarPath instanceof ReadableResourceInternal) {
             resource = (ReadableResourceInternal) tarPath;
         } else if (tarPath instanceof ReadableResource) {
             // custom type
-            resource = new UnknownBackingFileReadableResource((ReadableResource)tarPath);
+            resource = new UnknownBackingFileReadableResource((ReadableResource) tarPath);
         } else {
             tarFile = file(tarPath);
             resource = new LocalResourceAdapter(new LocalFileStandInExternalResource(tarFile, fileSystem));
@@ -253,6 +255,7 @@ public class DefaultFileOperations implements FileOperations {
         ApiTextResourceAdapter.Factory textResourceAdapterFactory = services.get(ApiTextResourceAdapter.Factory.class);
         Factory<PatternSet> patternSetFactory = services.getFactory(PatternSet.class);
         Deleter deleter = services.get(Deleter.class);
+        DocumentationRegistry documentationRegistry = services.get(DocumentationRegistry.class);
 
         DefaultResourceHandler.Factory resourceHandlerFactory = DefaultResourceHandler.Factory.from(
             fileResolver,
@@ -272,7 +275,8 @@ public class DefaultFileOperations implements FileOperations {
             fileTreeFactory,
             fileSystem,
             patternSetFactory,
-            deleter
+            deleter,
+            documentationRegistry
         );
     }
 }

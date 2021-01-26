@@ -15,6 +15,7 @@
  */
 package org.gradle.groovy.scripts.internal;
 
+import com.google.common.collect.ImmutableMap;
 import org.codehaus.groovy.GroovyBugError;
 import org.codehaus.groovy.ast.ASTNode;
 import org.codehaus.groovy.ast.AnnotatedNode;
@@ -61,6 +62,7 @@ import org.codehaus.groovy.syntax.Types;
 import org.codehaus.groovy.transform.trait.Traits;
 import org.objectweb.asm.Opcodes;
 
+import javax.inject.Inject;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.Modifier;
@@ -83,9 +85,19 @@ public class GradleResolveVisitor extends ResolveVisitor {
     private static final String[] DEFAULT_IMPORTS = {"java.lang.", "java.io.", "java.net.", "java.util.", "groovy.lang.", "groovy.util.", "java.time."};
     private static final String SCRIPTS_PACKAGE = "org.gradle.groovy.scripts";
 
+    /**
+     * When updating this mapping, consider being nice and also updating the list of generated imports for our internal test infrastructure.
+     * See the import list in AnnotationGenerator.kt
+     */
+    private static final ImmutableMap<String, ClassNode> TYPE_REDIRECT_MAPPING = ImmutableMap.of(
+        "Inject", ClassHelper.makeCached(Inject.class),
+        "BigInteger", ClassHelper.BigInteger_TYPE,
+        "BigDecimal", ClassHelper.BigDecimal_TYPE
+    );
+
     private ClassNode currentClass;
     private final Map<String, List<String>> simpleNameToFQN;
-    private CompilationUnit compilationUnit;
+    private final CompilationUnit compilationUnit;
     private SourceUnit source;
     private VariableScope currentScope;
 
@@ -93,8 +105,8 @@ public class GradleResolveVisitor extends ResolveVisitor {
     private boolean inPropertyExpression;
     private boolean inClosure;
 
-    private Map<String, GenericsType> genericParameterNames = new HashMap<String, GenericsType>();
-    private Set<FieldNode> fieldTypesChecked = new HashSet<FieldNode>();
+    private Map<String, GenericsType> genericParameterNames = new HashMap<>();
+    private Set<FieldNode> fieldTypesChecked = new HashSet<>();
     private boolean checkingVariableTypeInDeclaration;
     private ImportNode currImportNode;
     private MethodNode currentMethod;
@@ -500,7 +512,7 @@ public class GradleResolveVisitor extends ResolveVisitor {
 
     private static String replaceLastPoint(String name) {
         int lastPoint = name.lastIndexOf('.');
-        if (lastPoint>0) {
+        if (lastPoint > 0) {
             name = name.substring(0, lastPoint)
                 + "$"
                 + name.substring(lastPoint + 1);
@@ -576,11 +588,8 @@ public class GradleResolveVisitor extends ResolveVisitor {
                     return true;
                 }
             }
-            if (name.equals("BigInteger")) {
-                type.setRedirect(ClassHelper.BigInteger_TYPE);
-                return true;
-            } else if (name.equals("BigDecimal")) {
-                type.setRedirect(ClassHelper.BigDecimal_TYPE);
+            if (TYPE_REDIRECT_MAPPING.containsKey(name)) {
+                type.setRedirect(TYPE_REDIRECT_MAPPING.get(name));
                 return true;
             }
         }
@@ -628,13 +637,13 @@ public class GradleResolveVisitor extends ResolveVisitor {
         // check module node imports aliases
         // the while loop enables a check for inner classes which are not fully imported,
         // but visible as the surrounding class is imported and the inner class is public/protected static
-        String pname = name;
+        String pname;
         int index = name.length();
-    /*
-     * we have a name foo.bar and an import foo.foo. This means foo.bar is possibly
-     * foo.foo.bar rather than foo.bar. This means to cut at the dot in foo.bar and
-     * foo for import
-     */
+        /*
+         * we have a name foo.bar and an import foo.foo. This means foo.bar is possibly
+         * foo.foo.bar rather than foo.bar. This means to cut at the dot in foo.bar and
+         * foo for import
+         */
         while (true) {
             pname = name.substring(0, index);
             ClassNode aliasedNode = null;
@@ -1100,10 +1109,10 @@ public class GradleResolveVisitor extends ResolveVisitor {
         Variable v = ve.getAccessedVariable();
 
         if (!(v instanceof DynamicVariable) && !checkingVariableTypeInDeclaration) {
-        /*
-         *  GROOVY-4009: when a normal variable is simply being used, there is no need to try to
-         *  resolve its type. Variable type resolve should proceed only if the variable is being declared.
-         */
+            /*
+             *  GROOVY-4009: when a normal variable is simply being used, there is no need to try to
+             *  resolve its type. Variable type resolve should proceed only if the variable is being declared.
+             */
             return ve;
         }
         if (v instanceof DynamicVariable) {
@@ -1360,8 +1369,8 @@ public class GradleResolveVisitor extends ResolveVisitor {
                 checkAnnotationMemberValue(newValue);
             }
             if (annType.isResolved()) {
-                Class annTypeClass = annType.getTypeClass();
-                Retention retAnn = (Retention) annTypeClass.getAnnotation(Retention.class);
+                Class<?> annTypeClass = annType.getTypeClass();
+                Retention retAnn = annTypeClass.getAnnotation(Retention.class);
                 if (retAnn != null && retAnn.value().equals(RetentionPolicy.RUNTIME)) {
                     AnnotationNode anyPrevAnnNode = tmpAnnotations.put(annTypeClass.getName(), an);
                     if (anyPrevAnnNode != null) {

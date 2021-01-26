@@ -38,7 +38,9 @@ import java.util.List;
  * <p>Example usage:
  *
  * <pre class='autoTested'>
- *     apply plugin: "groovy"
+ *     plugins {
+ *         id 'groovy'
+ *     }
  *
  *     repositories {
  *         mavenCentral()
@@ -48,7 +50,7 @@ import java.util.List;
  *         implementation "org.codehaus.groovy:groovy-all:2.1.2"
  *     }
  *
- *     def groovyClasspath = groovyRuntime.inferGroovyClasspath(configurations.compile)
+ *     def groovyClasspath = groovyRuntime.inferGroovyClasspath(configurations.compileClasspath)
  *     // The returned class path can be used to configure the 'groovyClasspath' property of tasks
  *     // such as 'GroovyCompile' or 'Groovydoc', or to execute these and other Groovy tools directly.
  * </pre>
@@ -90,10 +92,6 @@ public class GroovyRuntime {
 
                 if (groovyJar.isGroovyAll()) {
                     return project.getLayout().files(groovyJar.getFile());
-                }
-
-                if (project.getRepositories().isEmpty()) {
-                    throw new GradleException("Cannot infer Groovy class path because no repository is declared for the project.");
                 }
 
                 String notation = groovyJar.getDependencyNotation();

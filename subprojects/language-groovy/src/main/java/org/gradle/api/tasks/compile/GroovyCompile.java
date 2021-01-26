@@ -19,7 +19,6 @@ package org.gradle.api.tasks.compile;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
-import org.gradle.api.Incubating;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.file.ConfigurableFileCollection;
@@ -30,68 +29,69 @@ import org.gradle.api.internal.FeaturePreviews;
 import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.file.FileTreeInternal;
 import org.gradle.api.internal.file.TemporaryFileProvider;
-import org.gradle.api.internal.tasks.JavaToolChainFactory;
 import org.gradle.api.internal.tasks.compile.CleaningJavaCompiler;
+import org.gradle.api.internal.tasks.compile.CompilationSourceDirs;
 import org.gradle.api.internal.tasks.compile.CompilerForkUtils;
 import org.gradle.api.internal.tasks.compile.DefaultGroovyJavaJointCompileSpec;
 import org.gradle.api.internal.tasks.compile.DefaultGroovyJavaJointCompileSpecFactory;
 import org.gradle.api.internal.tasks.compile.GroovyCompilerFactory;
 import org.gradle.api.internal.tasks.compile.GroovyJavaJointCompileSpec;
+import org.gradle.api.internal.tasks.compile.HasCompileOptions;
 import org.gradle.api.internal.tasks.compile.incremental.IncrementalCompilerFactory;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.CompilationSourceDirs;
+import org.gradle.api.internal.tasks.compile.incremental.recomp.DefaultSourceFileClassNameConverter;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.GroovyRecompilationSpecProvider;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.GroovySourceFileClassNameConverter;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.IncrementalCompilationResult;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpecProvider;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.model.ReplacedBy;
+import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
+import org.gradle.api.tasks.IgnoreEmptyDirectories;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.LocalState;
 import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.internal.file.Deleter;
-import org.gradle.jvm.toolchain.JavaToolChain;
+import org.gradle.internal.jvm.Jvm;
+import org.gradle.internal.jvm.inspection.JvmMetadataDetector;
+import org.gradle.jvm.toolchain.JavaInstallationMetadata;
+import org.gradle.jvm.toolchain.JavaLauncher;
 import org.gradle.language.base.internal.compile.Compiler;
 import org.gradle.util.GFileUtils;
 import org.gradle.util.IncubationLogger;
-import org.gradle.work.ChangeType;
-import org.gradle.work.FileChange;
 import org.gradle.work.Incremental;
 import org.gradle.work.InputChanges;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.stream.StreamSupport;
 
+import static com.google.common.base.Preconditions.checkState;
 import static org.gradle.api.internal.FeaturePreviews.Feature.GROOVY_COMPILATION_AVOIDANCE;
+import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.mergeIncrementalMappingsIntoOldMappings;
 import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.readSourceClassesMappingFile;
-import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.writeSourceClassesMappingFile;
 
 /**
  * Compiles Groovy source files, and optionally, Java source files.
  */
 @CacheableTask
-public class GroovyCompile extends AbstractCompile {
+public class GroovyCompile extends AbstractCompile implements HasCompileOptions {
     private FileCollection groovyClasspath;
-    private ConfigurableFileCollection astTransformationClasspath;
+    private final ConfigurableFileCollection astTransformationClasspath;
     private final CompileOptions compileOptions;
     private final GroovyCompileOptions groovyCompileOptions = new GroovyCompileOptions();
-    private final FileCollection stableSources = getProject().files(new Callable<FileTree>() {
-        @Override
-        public FileTree call() {
-            return getSource();
-        }
-    });
+    private final FileCollection stableSources = getProject().files((Callable<FileTree>) this::getSource);
+    private final Property<JavaLauncher> javaLauncher;
     private File sourceClassesMappingFile;
 
     public GroovyCompile() {
@@ -100,13 +100,9 @@ public class GroovyCompile extends AbstractCompile {
         compileOptions.setIncremental(false);
         this.compileOptions = compileOptions;
         this.astTransformationClasspath = objectFactory.fileCollection();
+        this.javaLauncher = objectFactory.property(JavaLauncher.class);
         if (!experimentalCompilationAvoidanceEnabled()) {
-            this.astTransformationClasspath.from(new Callable<FileCollection>() {
-                @Override
-                public FileCollection call() {
-                    return getClasspath();
-                }
-            });
+            this.astTransformationClasspath.from((Callable<FileCollection>) this::getClasspath);
         }
         CompilerForkUtils.doNotCacheIfForkingViaExecutable(compileOptions, getOutputs());
     }
@@ -126,7 +122,6 @@ public class GroovyCompile extends AbstractCompile {
      * @since 5.6
      */
     @Classpath
-    @Incubating
     public ConfigurableFileCollection getAstTransformationClasspath() {
         return astTransformationClasspath;
     }
@@ -158,7 +153,7 @@ public class GroovyCompile extends AbstractCompile {
         if (result instanceof IncrementalCompilationResult) {
             // The compilation will generate the new mapping file
             // Only merge old mappings into new mapping on incremental recompilation
-            mergeIncrementalMappingsIntoOldMappings(inputChanges, oldMappings);
+            mergeIncrementalMappingsIntoOldMappings(getSourceClassesMappingFile(), getStableSources(), inputChanges, oldMappings);
         }
     }
 
@@ -174,27 +169,12 @@ public class GroovyCompile extends AbstractCompile {
      * @since 5.6
      */
     @LocalState
-    @Incubating
     protected File getSourceClassesMappingFile() {
         if (sourceClassesMappingFile == null) {
             File tmpDir = getServices().get(TemporaryFileProvider.class).newTemporaryFile(getName());
             sourceClassesMappingFile = new File(tmpDir, "source-classes-mapping.txt");
         }
         return sourceClassesMappingFile;
-    }
-
-    private void mergeIncrementalMappingsIntoOldMappings(InputChanges inputChanges, Multimap<String, String> oldMappings) {
-        Multimap<String, String> mappingsDuringIncrementalCompilation = readSourceClassesMappingFile(getSourceClassesMappingFile());
-
-        StreamSupport.stream(inputChanges.getFileChanges(getStableSources()).spliterator(), false)
-            .filter(fileChange -> fileChange.getChangeType() == ChangeType.REMOVED)
-            .map(FileChange::getNormalizedPath)
-            .forEach(oldMappings::removeAll);
-        mappingsDuringIncrementalCompilation.keySet().forEach(oldMappings::removeAll);
-
-        oldMappings.putAll(mappingsDuringIncrementalCompilation);
-
-        writeSourceClassesMappingFile(getSourceClassesMappingFile(), oldMappings);
     }
 
     private void warnIfCompileAvoidanceEnabled() {
@@ -233,7 +213,7 @@ public class GroovyCompile extends AbstractCompile {
             stableSources.getAsFileTree(),
             inputChanges.isIncremental(),
             () -> inputChanges.getFileChanges(stableSources).iterator(),
-            new GroovySourceFileClassNameConverter(sourceClassesMapping));
+            new DefaultSourceFileClassNameConverter(sourceClassesMapping));
     }
 
     /**
@@ -241,8 +221,8 @@ public class GroovyCompile extends AbstractCompile {
      *
      * @since 5.6
      */
-    @Incubating
     @SkipWhenEmpty
+    @IgnoreEmptyDirectories
     @PathSensitive(PathSensitivity.RELATIVE) // Java source files are supported, too. Therefore we should care about the relative path.
     @InputFiles
     protected FileCollection getStableSources() {
@@ -292,8 +272,15 @@ public class GroovyCompile extends AbstractCompile {
         }
     }
 
+    @Nullable
+    private JavaInstallationMetadata getToolchain() {
+        return javaLauncher.map(JavaLauncher::getMetadata).getOrNull();
+    }
+
     private GroovyJavaJointCompileSpec createSpec() {
-        DefaultGroovyJavaJointCompileSpec spec = new DefaultGroovyJavaJointCompileSpecFactory(compileOptions).create();
+        validateConfiguration();
+        DefaultGroovyJavaJointCompileSpec spec = new DefaultGroovyJavaJointCompileSpecFactory(compileOptions, getToolchain()).create();
+        assert spec != null;
 
         FileTreeInternal stableSourcesAsFileTree = (FileTreeInternal) getStableSources().getAsFileTree();
         List<File> sourceRoots = CompilationSourceDirs.inferSourceRoots(stableSourcesAsFileTree);
@@ -304,8 +291,7 @@ public class GroovyCompile extends AbstractCompile {
         spec.setWorkingDir(getProjectLayout().getProjectDirectory().getAsFile());
         spec.setTempDir(getTemporaryDir());
         spec.setCompileClasspath(ImmutableList.copyOf(determineGroovyCompileClasspath()));
-        spec.setSourceCompatibility(getSourceCompatibility());
-        spec.setTargetCompatibility(getTargetCompatibility());
+        configureCompatibilityOptions(spec);
         spec.setAnnotationProcessorPath(Lists.newArrayList(compileOptions.getAnnotationProcessorPath() == null ? getProjectLayout().files() : compileOptions.getAnnotationProcessorPath()));
         spec.setGroovyClasspath(Lists.newArrayList(getGroovyClasspath()));
         spec.setCompileOptions(compileOptions);
@@ -319,7 +305,48 @@ public class GroovyCompile extends AbstractCompile {
             GFileUtils.mkdirs(dir);
             spec.getGroovyCompileOptions().setStubDir(dir);
         }
+
+        configureExecutable(spec.getCompileOptions().getForkOptions());
+
         return spec;
+    }
+
+    private void configureCompatibilityOptions(DefaultGroovyJavaJointCompileSpec spec) {
+        JavaInstallationMetadata toolchain = getToolchain();
+        if (toolchain != null) {
+            boolean isSourceOrTargetConfigured = false;
+            if (super.getSourceCompatibility() != null) {
+                spec.setSourceCompatibility(getSourceCompatibility());
+                isSourceOrTargetConfigured = true;
+            }
+            if (super.getTargetCompatibility() != null) {
+                spec.setTargetCompatibility(getTargetCompatibility());
+                isSourceOrTargetConfigured = true;
+            }
+            if (!isSourceOrTargetConfigured) {
+                String languageVersion = toolchain.getLanguageVersion().toString();
+                spec.setSourceCompatibility(languageVersion);
+                spec.setTargetCompatibility(languageVersion);
+            }
+        } else {
+            spec.setSourceCompatibility(getSourceCompatibility());
+            spec.setTargetCompatibility(getTargetCompatibility());
+        }
+    }
+
+    private void configureExecutable(ForkOptions forkOptions) {
+        if (javaLauncher.isPresent()) {
+            forkOptions.setExecutable(javaLauncher.get().getExecutablePath().getAsFile().getAbsolutePath());
+        } else {
+            forkOptions.setExecutable(Jvm.current().getJavaExecutable().getAbsolutePath());
+        }
+    }
+
+    private void validateConfiguration() {
+        if (javaLauncher.isPresent()) {
+            checkState(getOptions().getForkOptions().getJavaHome() == null, "Must not use `javaHome` property on `ForkOptions` together with `javaLauncher` property");
+            checkState(getOptions().getForkOptions().getExecutable() == null, "Must not use `executable` property on `ForkOptions` together with `javaLauncher` property");
+        }
     }
 
     private void checkGroovyClasspathIsNonEmpty() {
@@ -338,17 +365,14 @@ public class GroovyCompile extends AbstractCompile {
      */
     @Input
     protected String getGroovyCompilerJvmVersion() {
+        if (javaLauncher.isPresent()) {
+            return javaLauncher.get().getMetadata().getLanguageVersion().toString();
+        }
+        final File customHome = getOptions().getForkOptions().getJavaHome();
+        if(customHome != null) {
+            return getServices().get(JvmMetadataDetector.class).getMetadata(customHome).getLanguageVersion().getMajorVersion();
+        }
         return JavaVersion.current().getMajorVersion();
-    }
-
-    /**
-     * We need to track the toolchain used by the Groovy compiler to compile Java sources.
-     *
-     * @since 4.0
-     */
-    @Nested
-    protected JavaToolChain getJavaToolChain() {
-        return getJavaToolChainFactory().forCompileOptions(getOptions());
     }
 
     /**
@@ -400,9 +424,16 @@ public class GroovyCompile extends AbstractCompile {
         this.groovyClasspath = groovyClasspath;
     }
 
-    @Inject
-    protected JavaToolChainFactory getJavaToolChainFactory() {
-        throw new UnsupportedOperationException();
+    /**
+     * The toolchain {@link JavaLauncher} to use for executing the Groovy compiler.
+     *
+     * @return the java launcher property
+     * @since 6.8
+     */
+    @Nested
+    @Optional
+    public Property<JavaLauncher> getJavaLauncher() {
+        return javaLauncher;
     }
 
     @Inject

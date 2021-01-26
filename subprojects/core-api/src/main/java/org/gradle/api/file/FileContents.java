@@ -16,7 +16,6 @@
 
 package org.gradle.api.file;
 
-import org.gradle.api.Incubating;
 import org.gradle.api.provider.Provider;
 
 /**
@@ -24,7 +23,6 @@ import org.gradle.api.provider.Provider;
  *
  * @since 6.1
  */
-@Incubating
 public interface FileContents {
 
     /**
@@ -44,6 +42,9 @@ public interface FileContents {
      *     When the underlying file exists but reading it fails, the ensuing exception is permanently propagated to callers of
      *     {@link Provider#get}, {@link Provider#getOrElse}, {@link Provider#getOrNull} and {@link Provider#isPresent}.
      * </p>
+     *
+     * The returned provider cannot be queried at configuration time but can produce a configuration time provider
+     * via {@link Provider#forUseAtConfigurationTime()}.
      *
      * @return provider of the entire file contents as a single String.
      */
@@ -66,6 +67,9 @@ public interface FileContents {
      *     When the underlying file exists but reading it fails, the ensuing exception is permanently propagated to callers of
      *     {@link Provider#get}, {@link Provider#getOrElse}, {@link Provider#getOrNull} and {@link Provider#isPresent}.
      * </p>
+     *
+     * The returned provider cannot be queried at configuration time but can produce a configuration time provider
+     * via {@link Provider#forUseAtConfigurationTime()}.
      *
      * @return provider of the entire file contents as a single byte array.
      */
